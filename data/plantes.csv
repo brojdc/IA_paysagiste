@@ -1,0 +1,31 @@
+nom,type,exposition,sol,climat,hauteur_m,largeur_m,distance_m,floraison,feuillage,couleur,notes
+Lavande (Lavandula),arbuste,plein_soleil,drainant,mediterraneen,0.6,0.8,0.6,06-08,persistant,violet,Tres mellifere; supporte la secheresse
+Romarin (Salvia rosmarinus),arbuste,plein_soleil,drainant,mediterraneen,1.0,1.0,0.8,02-05,persistant,bleu,Cuisine; tres rustique en sol draine
+Thym (Thymus vulgaris),couvre_sol,plein_soleil,drainant,mediterraneen,0.2,0.4,0.3,05-07,persistant,rose,Parfait bordure; aromatique
+Gaura (Oenothera lindheimeri),vivace,plein_soleil,drainant,oceanique,0.9,0.5,0.5,06-10,caduc,blanc-rose,Floraison longue; leger
+Sauge officinale (Salvia officinalis),vivace,plein_soleil,drainant,oceanique,0.6,0.6,0.5,05-07,persistant,violet,Aromatique; supporte bien la chaleur
+Santoline (Santolina),arbuste,plein_soleil,drainant,mediterraneen,0.6,0.6,0.5,06-08,persistant,jaune,Feuillage gris; tres sec
+Ciste (Cistus),arbuste,plein_soleil,drainant,mediterraneen,1.2,1.2,1.0,05-07,persistant,rose-blanc,Sol pauvre; plein soleil
+Agapanthe (Agapanthus),vivace,plein_soleil,normal,oceanique,0.9,0.6,0.6,06-08,caduc,bleu,Eviter sols trop humides l hiver
+Sedum (Hylotelephium),vivace,plein_soleil,drainant,continental,0.5,0.5,0.4,08-10,caduc,rose,Resistant; attire pollinisateurs
+Echinacea,vivace,plein_soleil,normal,continental,0.9,0.5,0.5,07-09,caduc,rose,Tres robuste; fleurs estivales
+Achillee (Achillea),vivace,plein_soleil,drainant,continental,0.6,0.5,0.4,06-09,caduc,jaune-blanc,Supporte secheresse
+Perovskia (Salvia yangii),arbuste,plein_soleil,drainant,continental,1.0,0.8,0.7,07-10,caduc,bleu,Excellent en plein soleil sec
+Hortensia (Hydrangea),arbuste,mi_ombre,humide,oceanique,1.5,1.5,1.2,06-09,caduc,rose-bleu,Sol frais; eviter soleil brulant
+Hosta,vivace,ombre,humide,oceanique,0.5,0.8,0.6,06-08,caduc,blanc-lavande,Feuillage decoratif; limaces
+Fougere (Dryopteris),vivace,ombre,humide,oceanique,0.8,0.8,0.7,00-00,caduc,vert,Sous-bois; tres tolerante
+Heuchere,vivace,mi_ombre,normal,oceanique,0.4,0.5,0.4,05-07,persistant,blanc,Feuillage colore
+Skimmia,arbuste,ombre,normal,oceanique,0.9,0.9,0.8,03-05,persistant,blanc,Acide a neutre; baies decoratives
+Camelia,arbuste,mi_ombre,normal,oceanique,2.0,1.5,1.2,02-04,persistant,rose,Sol acide; eviter calcaire
+Buis (Buxus),arbuste,mi_ombre,normal,oceanique,1.0,1.0,0.6,00-00,persistant,vert,Taille; sensible pyrale
+Photinia,arbuste,mi_ombre,normal,oceanique,2.5,2.0,1.5,04-06,persistant,blanc,Jeunes pousses rouges
+Graminee (Stipa tenuissima),vivace,plein_soleil,drainant,continental,0.6,0.6,0.5,06-08,caduc,vert,Effet leger; peu d eau
+Miscanthus,graminee,plein_soleil,normal,continental,1.6,1.0,0.9,08-10,caduc,beige,Grand volume; ecran
+Lierre (Hedera),grimpante,ombre,normal,oceanique,5.0,2.0,0.8,09-10,persistant,vert,Couvre-sol ou grimpant; tres robuste
+Clematite,grimpante,mi_ombre,normal,oceanique,3.0,1.0,1.0,05-09,caduc,violet,Pied a l ombre; tete au soleil
+Rosier paysager,arbuste,plein_soleil,normal,continental,1.0,1.0,0.8,05-10,caduc,rose,Floraison longue; entretien
+Buddleia,arbuste,plein_soleil,normal,continental,2.5,2.0,1.5,07-09,caduc,violet,Attire papillons; vigoureux
+Cornouiller (Cornus),arbuste,mi_ombre,humide,continental,2.0,2.0,1.5,04-06,caduc,blanc,Rameaux decoratifs en hiver
+Aucuba,arbuste,ombre,normal,oceanique,1.5,1.5,1.2,04-05,persistant,vert,Tres tolerante a l ombre
+Fusain (Euonymus),arbuste,mi_ombre,normal,oceanique,1.5,1.5,1.0,05-06,persistant,vert,Haie/masse; facile
+Laurier-tin (Viburnum tinus),arbuste,mi_ombre,normal,mediterraneen,2.0,1.5,1.2,11-03,persistant,blanc,Floraison hivernale
