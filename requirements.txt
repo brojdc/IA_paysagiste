@@ -4,3 +4,5 @@ pydantic
 streamlit
 requests
 matplotlib
+pvlib
+pandas
