@@ -1,8 +1,15 @@
+# core/services.py
 from __future__ import annotations
 
 import math
+import csv
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Tuple
+
+import pandas as pd
+import reverse_geocoder as rg
+from pvlib.solarposition import get_solarposition
 
 from core.geometry import rect_to_poly, poly_area, circle_area
 from core.schemas import (
@@ -16,13 +23,10 @@ from core.schemas import (
     PlantPlacement,
 )
 
-import csv
-from pathlib import Path
-import pandas as pd
-from pvlib.solarposition import get_solarposition
-import reverse_geocoder as rg
 
-
+# -------------------------------------------------------------------
+# Utils classes exposition (minute -> classe)
+# -------------------------------------------------------------------
 def _classe_from_minutes(minutes: int, max_minutes: int) -> str:
     if max_minutes <= 0:
         return "ombre"
@@ -34,6 +38,9 @@ def _classe_from_minutes(minutes: int, max_minutes: int) -> str:
     return "plein_soleil"
 
 
+# -------------------------------------------------------------------
+# Plantation (utilise exposition précise)
+# -------------------------------------------------------------------
 def proposer_plantation(req: PlantationRequest) -> PlantationPlanOutput:
     terrain = req.terrain
 
@@ -69,12 +76,12 @@ def proposer_plantation(req: PlantationRequest) -> PlantationPlanOutput:
         idx = len(placements) % len(candidates)
         p = candidates[idx]
 
+        # échantillonnage selon distance plante
         step = max(1, int(round(p.distance_m / terrain.pas_grille_m)))
         key = (int(x / terrain.pas_grille_m), int(y / terrain.pas_grille_m))
 
         if (key[0] % step != 0) or (key[1] % step != 0):
             continue
-
         if key in used:
             continue
         used.add(key)
@@ -98,17 +105,21 @@ def proposer_plantation(req: PlantationRequest) -> PlantationPlanOutput:
     return PlantationPlanOutput(resume=resume, placements=placements)
 
 
-
+# -------------------------------------------------------------------
+# Surfaces (parcelle / maison(s) / terrasse / trous)
+# -------------------------------------------------------------------
 def compute_surfaces(terrain: TerrainInput) -> Dict[str, float]:
     poly_parcelle = rect_to_poly(
         *terrain.parcelle.origine, terrain.parcelle.largeur, terrain.parcelle.hauteur
     )
     surface_parcelle = poly_area(poly_parcelle)
 
-    poly_maison = rect_to_poly(
-        *terrain.maison.origine, terrain.maison.largeur, terrain.maison.hauteur
-    )
-    surface_maison = poly_area(poly_maison)
+    # ✅ Plusieurs blocs maison (maison + extensions)
+    blocs = terrain.get_blocs_maison()
+    surface_maison = 0.0
+    for m in blocs:
+        poly_m = rect_to_poly(*m.origine, m.largeur, m.hauteur)
+        surface_maison += poly_area(poly_m)
 
     poly_terrasse = rect_to_poly(
         *terrain.terrasse.origine, terrain.terrasse.largeur, terrain.terrasse.hauteur
@@ -135,6 +146,9 @@ def compute_surfaces(terrain: TerrainInput) -> Dict[str, float]:
     }
 
 
+# -------------------------------------------------------------------
+# Plan 2D
+# -------------------------------------------------------------------
 def build_plan_2d(terrain: TerrainInput) -> List[Shape2D]:
     shapes: List[Shape2D] = []
 
@@ -149,16 +163,19 @@ def build_plan_2d(terrain: TerrainInput) -> List[Shape2D]:
         )
     )
 
-    shapes.append(
-        Shape2D(
-            type="rectangle",
-            label="Maison",
-            x=float(terrain.maison.origine[0]),
-            y=float(terrain.maison.origine[1]),
-            w=float(terrain.maison.largeur),
-            h=float(terrain.maison.hauteur),
+    blocs = terrain.get_blocs_maison()
+    for i, m in enumerate(blocs, start=1):
+        label = "Maison" if i == 1 else f"Extension {i-1}"
+        shapes.append(
+            Shape2D(
+                type="rectangle",
+                label=label,
+                x=float(m.origine[0]),
+                y=float(m.origine[1]),
+                w=float(m.largeur),
+                h=float(m.hauteur),
+            )
         )
-    )
 
     shapes.append(
         Shape2D(
@@ -197,6 +214,9 @@ def build_plan_2d(terrain: TerrainInput) -> List[Shape2D]:
     return shapes
 
 
+# -------------------------------------------------------------------
+# Exposition (simplifiée)
+# -------------------------------------------------------------------
 @dataclass(frozen=True)
 class SunCase:
     name: str
@@ -251,6 +271,10 @@ def _is_in_shadow_by_house(
     sun_azimuth_deg: float,
     orientation_nord_deg: float,
 ) -> bool:
+    """
+    Test ombre approx d'un bloc rectangulaire.
+    Modèle simplifié (mais suffisant pour proto).
+    """
     alt = math.radians(max(1.0, sun_altitude_deg))
     L = house_height / math.tan(alt)
 
@@ -267,9 +291,11 @@ def _is_in_shadow_by_house(
     x0, y0 = hx2, hy2
     x1, y1 = hx2 + house_w, hy2 + house_h
 
+    # à l'intérieur du bâti => ombre
     if x0 <= cx2 <= x1 and y0 <= cy2 <= y1:
         return True
 
+    # centre du bâtiment
     house_cx = (x0 + x1) / 2.0
     house_cy = (y0 + y1) / 2.0
 
@@ -282,6 +308,7 @@ def _is_in_shadow_by_house(
     if t > L:
         return False
 
+    # approximation "disque" autour du rectangle
     house_radius = 0.5 * math.hypot(house_w, house_h)
 
     px = vx - t * dx
@@ -291,19 +318,42 @@ def _is_in_shadow_by_house(
     return dist_perp <= house_radius
 
 
+def _is_in_shadow_by_any_house(
+    cell: Tuple[float, float],
+    terrain: TerrainInput,
+    sun_altitude_deg: float,
+    sun_azimuth_deg: float,
+) -> bool:
+    """
+    ✅ NOUVEAU : la cellule est à l'ombre si AU MOINS un bloc maison/extension lui fait de l'ombre.
+    """
+    orientation = float(terrain.orientation_nord_deg)
+    for m in terrain.get_blocs_maison():
+        hx, hy = m.origine
+        hw = float(m.largeur)
+        hh = float(m.hauteur)
+        hZ = float(m.hauteur_batiment)
+
+        if _is_in_shadow_by_house(
+            cell,
+            (float(hx), float(hy)),
+            hw,
+            hh,
+            hZ,
+            float(sun_altitude_deg),
+            float(sun_azimuth_deg),
+            orientation,
+        ):
+            return True
+    return False
+
+
 def compute_exposition(terrain: TerrainInput) -> Dict:
     sun_cases = _build_sun_cases(terrain.latitude)
 
     pas = float(terrain.pas_grille_m)
     W = float(terrain.parcelle.largeur)
     H = float(terrain.parcelle.hauteur)
-
-    hx, hy = terrain.maison.origine
-    hw = float(terrain.maison.largeur)
-    hh = float(terrain.maison.hauteur)
-    hZ = float(terrain.maison.hauteur_batiment)
-
-    orientation = float(terrain.orientation_nord_deg)
 
     cells = []
     counts = {"ombre": 0, "mi_ombre": 0, "plein_soleil": 0}
@@ -318,16 +368,7 @@ def compute_exposition(terrain: TerrainInput) -> Dict:
 
             score = 0
             for sc in sun_cases:
-                if not _is_in_shadow_by_house(
-                    (x, y),
-                    (hx, hy),
-                    hw,
-                    hh,
-                    hZ,
-                    sc.altitude_deg,
-                    sc.azimuth_deg,
-                    orientation,
-                ):
+                if not _is_in_shadow_by_any_house((x, y), terrain, sc.altitude_deg, sc.azimuth_deg):
                     score += 1
 
             if score <= 2:
@@ -360,6 +401,10 @@ def compute_exposition(terrain: TerrainInput) -> Dict:
         "resume": resume,
     }
 
+
+# -------------------------------------------------------------------
+# Plantes : CSV + filtres
+# -------------------------------------------------------------------
 def _plantes_csv_path() -> Path:
     # core/services.py -> remonte au dossier racine du projet -> data/plantes.csv
     return Path(__file__).resolve().parents[1] / "data" / "plantes.csv"
@@ -385,7 +430,7 @@ def load_plantes() -> List[Plante]:
                     floraison=row["floraison"],
                     feuillage=row["feuillage"],
                     couleur=row["couleur"],
-                    notes=row["notes"],
+                    notes=row.get("notes", ""),
                 )
             )
     return plantes
@@ -408,9 +453,12 @@ def filtrer_plantes(filtres: PlantesFiltrerInput) -> PlantesFiltrerOutput:
     res = [p for p in plantes if match(p)]
     return PlantesFiltrerOutput(nb=len(res), plantes=res)
 
+
+# -------------------------------------------------------------------
+# Reverse geocoding (resume)
+# -------------------------------------------------------------------
 def reverse_city(latitude: float, longitude: float) -> dict:
     res = rg.search((latitude, longitude), mode=1)[0]
-    # res contient: name, admin1, admin2, cc, lat, lon
     return {
         "city": res.get("name"),
         "region": res.get("admin1"),
@@ -418,17 +466,13 @@ def reverse_city(latitude: float, longitude: float) -> dict:
     }
 
 
+# -------------------------------------------------------------------
+# Exposition précise (pvlib) - ✅ multi-blocs maison/extension
+# -------------------------------------------------------------------
 def compute_exposition_precise(terrain: TerrainInput) -> Dict:
     pas_grille = float(terrain.pas_grille_m)
     W = float(terrain.parcelle.largeur)
     H = float(terrain.parcelle.hauteur)
-
-    hx, hy = terrain.maison.origine
-    hw = float(terrain.maison.largeur)
-    hh = float(terrain.maison.hauteur)
-    hZ = float(terrain.maison.hauteur_batiment)
-
-    orientation = float(terrain.orientation_nord_deg)
 
     date = terrain.date_ref  # "YYYY-MM-DD"
     tz = terrain.timezone
@@ -451,7 +495,7 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
     cells = []
     counts = {"ombre": 0, "mi_ombre": 0, "plein_soleil": 0}
 
-    valid_sun = [(alt, az) for alt, az in zip(altitudes, azimuths) if alt > 0]
+    valid_sun = [(float(alt), float(az)) for alt, az in zip(altitudes, azimuths) if float(alt) > 0.0]
     max_steps = len(valid_sun)
     max_minutes = max_steps * pas_min
 
@@ -462,16 +506,7 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
 
             sunny_steps = 0
             for alt, az in valid_sun:
-                if not _is_in_shadow_by_house(
-                    (x, y),
-                    (float(hx), float(hy)),
-                    hw,
-                    hh,
-                    hZ,
-                    float(alt),
-                    float(az),
-                    orientation,
-                ):
+                if not _is_in_shadow_by_any_house((x, y), terrain, alt, az):
                     sunny_steps += 1
 
             minutes_soleil = sunny_steps * pas_min

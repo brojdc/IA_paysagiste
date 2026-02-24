@@ -1,15 +1,22 @@
 # IA Paysagiste – Prototype V1
 
-## Objectif
+## Objectif du projet
 
-Ce projet est un prototype d’outil d’analyse de surfaces pour un chantier paysager.
+**IA Paysagiste** est un prototype d’outil d’aide à la conception de jardins.
 
-Il permet de :
+L’application permet de :
 
-* saisir les dimensions d’une parcelle, d’une maison et d’une terrasse
-* prendre en compte des trous ou massifs dans la terrasse
+* modéliser un terrain (parcelle, maison, terrasse, massifs)
 * calculer automatiquement les surfaces utiles
-* afficher les résultats via une interface web simple
+* simuler l’ensoleillement réel du jardin 
+* recommander des plantes adaptées :
+
+  * à l’exposition solaire
+  * au type de sol
+  * au climat
+* proposer automatiquement un **plan de plantation en 2D**
+
+Ce projet constitue la base d’un futur **assistant IA pour paysagistes**.
 
 ---
 
@@ -19,80 +26,71 @@ Il permet de :
 IA_paysagiste/
 │
 ├── api/
-│   └── main.py          → API FastAPI (moteur de calcul)
+│   └── main.py              → API FastAPI (logique métier)
 │
 ├── core/
-│   └── geometry.py      → Fonctions mathématiques (aires, polygones, cercles)
+│   ├── geometry.py          → Calculs géométriques (aires, polygones…)
+│   ├── schemas.py           → Modèles de données (Pydantic)
+│   └── services.py          → Algorithmes :
+│                             - surfaces
+│                             - plan 2D
+│                             - exposition solaire
+│                             - filtrage plantes
+│                             - proposition de plantation
+│
+├── data/
+│   └── plantes.csv          → Catalogue de plantes
 │
 ├── ui/
-│   └── formulaire.py    → Interface utilisateur Streamlit
+│   └── formulaire.py        → Interface Streamlit
 │
 ├── scripts/
-│   └── dijkstra_demo.py → Prototype d’algorithme de chemin le plus court
+│   └── dijkstra_demo.py     → Prototype d’algorithme de graphe (R&D)
 │
-├── run_api.py           → Lance l’API
-├── run_ui.py            → Lance l’interface
+├── run_api.py               → Lance l’API
+├── run_ui.py                → Lance l’interface
 └── requirements.txt
 ```
 
 ---
 
-## Rôle des composants
+## Fonctionnalités actuelles
 
-### Backend – API FastAPI
+### Backend (FastAPI)
 
-Le fichier `api/main.py` :
+* Calcul des **surfaces en m²**
+* Génération d’un **plan 2D**
+* Simulation d’**exposition solaire** :
 
-* reçoit les données du formulaire
-* effectue les calculs de surfaces
-* renvoie un résultat JSON
+  * version simplifiée
+  * version réelle basée sur **pvlib**
+* Filtrage de plantes selon :
 
-C’est le **moteur logique** du projet.
+  * exposition
+  * sol
+  * climat
+* **Algorithme de placement automatique** des plantes
 
----
-
-### Frontend – Interface Streamlit
-
-Le fichier `ui/formulaire.py` :
-
-* affiche un formulaire de saisie
-* envoie les données à l’API
-* affiche les résultats
-
-C’est la **partie visible par l’utilisateur**.
+Constitue un **moteur IA paysagiste prototype**.
 
 ---
 
-### Logique mathématique
+### Frontend (Streamlit)
 
-Le fichier `core/geometry.py` :
+* Formulaire complet de chantier
+* Visualisation :
 
-* contient les fonctions de calcul d’aire
-* est utilisé directement par l’API
-* constitue la **base métier du projet**
+  * plan 2D
+  * carte d’ensoleillement
+* Recommandation de plantes catalogue
 
----
-
-### Recherche algorithmique
-
-Le fichier `scripts/dijkstra_demo.py` :
-
-* implémente l’algorithme de Dijkstra
-* n’est pas encore utilisé dans l’application
-* servira plus tard pour :
-
-  * circulation dans un jardin
-  * optimisation de trajets
-  * robot tondeuse
-  * irrigation intelligente
-
-C’est la partie **R&D vers une future IA paysagiste**.
+Fournit une **démo interactive utilisable**.
 
 ---
 
 ## Lancement du projet
 
-### 1. Installer les dépendances
+### 1. Installation
 
 ```bash
 pip install -r requirements.txt
@@ -104,54 +102,77 @@ pip install -r requirements.txt
 python run_api.py
 ```
 
-Documentation disponible sur :
+Documentation :
 
 ```
 http://127.0.0.1:8000/docs
 ```
 
-### 3. Lancer l’interface utilisateur
+---
+
+### 3. Lancer l’interface
 
 ```bash
 python run_ui.py
 ```
 
-Interface disponible sur :
+Interface :
 
 ```
-http://localhost:8502
+http://localhost:8501
 ```
 
 ---
 
 ## État actuel
 
-Version V1 :
+**Prototype technique avancé** :
 
-* calcul des surfaces fonctionnel
-* API opérationnelle
-* interface simple utilisable
+* moteur de calcul fonctionnel
+* simulation solaire réelle
+* recommandation de plantes
+* plan de plantation automatique
+* interface de démonstration
+
+Niveau : **MVP technique IA paysagiste**
 
 ---
 
-## Prochaines étapes
+## Roadmap
 
-* géolocalisation du terrain
-* calcul d’ensoleillement
-* recommandation de plantes
-* optimisation de circulation (algorithmes de graphe)
-* intégration d’intelligence artificielle
+### Court terme
+
+* affichage des plantes sur le plan 2D
+* résumé intelligent du jardin
+* amélioration UX de l’interface
+
+### Moyen terme
+
+* import de plans réels / cadastre
+* gestion de zones (pelouse, massif, potager…)
+* génération de dossier PDF client
+
+### Long terme
+
+* optimisation automatique du jardin
+* apprentissage sur projets réels
+* transformation en **SaaS pour paysagistes**
 
 ---
 
 ## Vision
 
-Construire un **assistant IA pour les paysagistes** capable de :
+Créer un **assistant IA métier** capable de :
 
 * analyser automatiquement un terrain
 * proposer des aménagements optimisés
-* générer des plans et devis
+* générer plans, listes de plantes et devis
+* faire gagner du temps aux paysagistes
+
+Objectif final : **produit SaaS IA pour le paysage**.
 
 ---
 
-Projet en cours de développement.
+## Statut
+
+Projet en cours de développement — Prototype V1.
