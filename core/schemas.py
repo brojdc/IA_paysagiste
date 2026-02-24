@@ -1,7 +1,11 @@
+# core/schema.py
 from typing import List, Tuple, Optional, Literal
 from pydantic import BaseModel, Field
 
 
+# -------------------------
+# Géométrie de base
+# -------------------------
 class Rectangle2D(BaseModel):
     origine: Tuple[float, float] = Field(..., description="Coin Sud-Ouest (x, y) en metres")
     largeur: float = Field(..., ge=0, description="Largeur en metres")
@@ -19,9 +23,25 @@ class Trou(BaseModel):
     rayon: Optional[float] = Field(None, ge=0, description="Rayon si cercle")
 
 
+# -------------------------
+# Entrée principale terrain
+# -------------------------
 class TerrainInput(BaseModel):
     parcelle: Rectangle2D
-    maison: Maison
+
+    # NOUVEAU : plusieurs blocs maison (maison principale + extensions)
+    maisons: List[Maison] = Field(
+        default_factory=list,
+        description="Liste des blocs de maison (maison principale + extensions).",
+    )
+
+    # COMPATIBILITÉ : si tu veux garder l'ancien champ 'maison' encore un moment
+    # -> tu peux le remplir depuis l'UI et le backend peut convertir maison -> maisons
+    maison: Optional[Maison] = Field(
+        default=None,
+        description="(Compat) Ancienne version: une seule maison. Si renseigné, à convertir en 'maisons'.",
+    )
+
     terrasse: Rectangle2D
     trous_terrasse: List[Trou] = Field(default_factory=list)
 
@@ -37,7 +57,21 @@ class TerrainInput(BaseModel):
     heure_debut: int = Field(6, ge=0, le=23, description="Heure de debut (0-23)")
     heure_fin: int = Field(21, ge=0, le=23, description="Heure de fin (0-23)")
 
+    def get_blocs_maison(self) -> List[Maison]:
+        """
+        Helper pratique (optionnel).
+        Utilise 'maisons' si fourni, sinon fallback sur 'maison' (ancienne version).
+        """
+        if self.maisons:
+            return self.maisons
+        if self.maison is not None:
+            return [self.maison]
+        return []
 
+
+# -------------------------
+# Outputs
+# -------------------------
 class SurfacesOutput(BaseModel):
     surfaces_m2: dict
 
