@@ -6,3 +6,4 @@ requests
 matplotlib
 pvlib
 pandas
+astral

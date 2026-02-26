@@ -27,14 +27,46 @@ from core.schemas import (
 # -------------------------------------------------------------------
 # Utils classes exposition (minute -> classe)
 # -------------------------------------------------------------------
+def _cell_in_zone(x: float, y: float, terrain: TerrainInput) -> bool:
+    zone = terrain.zone_analyse
+    if not zone:
+        return True
+
+    ztype = zone.get("type")
+
+    W = float(terrain.parcelle.largeur)
+    H = float(terrain.parcelle.hauteur)
+
+    if ztype == "tout":
+        return True
+
+    if ztype == "fond":
+        return y > H * 0.66
+
+    if ztype == "cote_maison":
+        return y < H * 0.33
+
+    if ztype == "rectangle":
+        zx = float(zone.get("x", 0.0))
+        zy = float(zone.get("y", 0.0))
+        zw = float(zone.get("w", 0.0))
+        zh = float(zone.get("h", 0.0))
+        return zx <= x <= zx + zw and zy <= y <= zy + zh
+
+    return True   # ← IMPORTANT
+
+
 def _classe_from_minutes(minutes: int, max_minutes: int) -> str:
     if max_minutes <= 0:
         return "ombre"
+
     ratio = minutes / max_minutes
+
     if ratio <= 0.25:
         return "ombre"
     if ratio <= 0.60:
         return "mi_ombre"
+
     return "plein_soleil"
 
 
@@ -114,7 +146,7 @@ def compute_surfaces(terrain: TerrainInput) -> Dict[str, float]:
     )
     surface_parcelle = poly_area(poly_parcelle)
 
-    # ✅ Plusieurs blocs maison (maison + extensions)
+    # Plusieurs blocs maison (maison + extensions)
     blocs = terrain.get_blocs_maison()
     surface_maison = 0.0
     for m in blocs:
@@ -261,6 +293,86 @@ def _rotate_point(x: float, y: float, angle_deg: float) -> Tuple[float, float]:
     return (x * ca - y * sa, x * sa + y * ca)
 
 
+# -------------------------------------------------------------------
+# Segments (haies / murs)  ✅ DOIT ÊTRE AVANT _is_in_shadow_by_any_obstacle
+# -------------------------------------------------------------------
+def _dot(ax: float, ay: float, bx: float, by: float) -> float:
+    return ax * bx + ay * by
+
+
+def _dist_point_to_segment(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
+    abx = bx - ax
+    aby = by - ay
+    apx = px - ax
+    apy = py - ay
+
+    ab2 = abx * abx + aby * aby
+    if ab2 <= 1e-12:
+        return math.hypot(px - ax, py - ay)
+
+    t = max(0.0, min(1.0, _dot(apx, apy, abx, aby) / ab2))
+    cx = ax + t * abx
+    cy = ay + t * aby
+    return math.hypot(px - cx, py - cy)
+
+
+def _is_in_shadow_by_segment(
+    cell: Tuple[float, float],
+    a: Tuple[float, float],
+    b: Tuple[float, float],
+    height: float,
+    sun_altitude_deg: float,
+    sun_azimuth_deg: float,
+    orientation_nord_deg: float,
+    thickness: float,
+) -> bool:
+    """
+    Ombre d'une haie/mur modélisé(e) comme segment vertical.
+    Approx : bande autour du segment + longueur d'ombre L = height/tan(alt).
+    """
+    alt_deg = float(sun_altitude_deg)
+    if alt_deg <= 0.0:
+        return False  # (on ne devrait pas appeler avec alt<=0 si on filtre déjà)
+
+    alt = math.radians(max(1.0, alt_deg))
+    L = float(height) / math.tan(alt)
+
+    # azimut dans repère du plan
+    az_plan = (float(sun_azimuth_deg) - float(orientation_nord_deg)) % 360.0
+    az = math.radians(az_plan)
+    dx = -math.sin(az)
+    dy = -math.cos(az)
+
+    cx, cy = cell
+    ax0, ay0 = a
+    bx0, by0 = b
+
+    # Rotate tout dans le repère "plan" (comme maison)
+    cx2, cy2 = _rotate_point(float(cx), float(cy), -orientation_nord_deg)
+    ax2, ay2 = _rotate_point(float(ax0), float(ay0), -orientation_nord_deg)
+    bx2, by2 = _rotate_point(float(bx0), float(by0), -orientation_nord_deg)
+
+    # proche du segment ?
+    d = _dist_point_to_segment(cx2, cy2, ax2, ay2, bx2, by2)
+    if d > float(thickness):
+        return False
+
+    # derrière le segment dans la direction de l'ombre ?
+    mx = 0.5 * (ax2 + bx2)
+    my = 0.5 * (ay2 + by2)
+
+    vx = cx2 - mx
+    vy = cy2 - my
+
+    t = vx * dx + vy * dy
+    if t <= 0.0:
+        return False
+    if t > L:
+        return False
+
+    return True
+
+
 def _is_in_shadow_by_house(
     cell: Tuple[float, float],
     house_origin: Tuple[float, float],
@@ -278,7 +390,10 @@ def _is_in_shadow_by_house(
     alt = math.radians(max(1.0, sun_altitude_deg))
     L = house_height / math.tan(alt)
 
-    az = math.radians(sun_azimuth_deg)
+    # ✅ BUGFIX : corrige l'azimut du soleil dans le repère du plan
+    az_plan = (float(sun_azimuth_deg) - float(orientation_nord_deg)) % 360.0
+
+    az = math.radians(az_plan)
     dx = -math.sin(az)
     dy = -math.cos(az)
 
@@ -318,16 +433,15 @@ def _is_in_shadow_by_house(
     return dist_perp <= house_radius
 
 
-def _is_in_shadow_by_any_house(
+def _is_in_shadow_by_any_obstacle(
     cell: Tuple[float, float],
     terrain: TerrainInput,
     sun_altitude_deg: float,
     sun_azimuth_deg: float,
 ) -> bool:
-    """
-    ✅ NOUVEAU : la cellule est à l'ombre si AU MOINS un bloc maison/extension lui fait de l'ombre.
-    """
     orientation = float(terrain.orientation_nord_deg)
+
+    # 1) maisons/extensions
     for m in terrain.get_blocs_maison():
         hx, hy = m.origine
         hw = float(m.largeur)
@@ -345,6 +459,22 @@ def _is_in_shadow_by_any_house(
             orientation,
         ):
             return True
+
+    # 2) haies / murs (segments)
+    thickness = float(getattr(terrain, "pas_grille_m", 1.0)) * 0.75
+    for obs in getattr(terrain, "obstacles", []) or []:
+        if _is_in_shadow_by_segment(
+            cell,
+            (float(obs.a[0]), float(obs.a[1])),
+            (float(obs.b[0]), float(obs.b[1])),
+            float(obs.hauteur),
+            float(sun_altitude_deg),
+            float(sun_azimuth_deg),
+            orientation,
+            thickness=thickness,
+        ):
+            return True
+
     return False
 
 
@@ -366,9 +496,13 @@ def compute_exposition(terrain: TerrainInput) -> Dict:
             x = (ix + 0.5) * pas
             y = (iy + 0.5) * pas
 
+            # Filtre zone_analyse
+            if not _cell_in_zone(x, y, terrain):
+                continue
+
             score = 0
             for sc in sun_cases:
-                if not _is_in_shadow_by_any_house((x, y), terrain, sc.altitude_deg, sc.azimuth_deg):
+                if not _is_in_shadow_by_any_obstacle((x, y), terrain, sc.altitude_deg, sc.azimuth_deg):
                     score += 1
 
             if score <= 2:
@@ -381,7 +515,23 @@ def compute_exposition(terrain: TerrainInput) -> Dict:
             counts[classe] += 1
             cells.append({"x": round(x, 3), "y": round(y, 3), "score": score, "classe": classe})
 
-    total = max(1, len(cells))
+    total = len(cells)
+    if total == 0:
+        resume = {
+            "total_cells": 0,
+            "pct_ombre": 0.0,
+            "pct_mi_ombre": 0.0,
+            "pct_plein_soleil": 0.0,
+            "sun_cases": [
+                {"name": s.name, "altitude_deg": round(s.altitude_deg, 1), "azimuth_deg": s.azimuth_deg}
+                for s in sun_cases
+            ],
+            "zone_analyse": terrain.zone_analyse,
+            "cells_zone": 0,
+            "warning": "Zone vide : aucune cellule dans la zone_analyse.",
+        }
+        return {"pas_grille_m": pas, "largeur": W, "hauteur": H, "cells": cells, "resume": resume}
+
     resume = {
         "total_cells": total,
         "pct_ombre": round(100 * counts["ombre"] / total, 1),
@@ -391,15 +541,11 @@ def compute_exposition(terrain: TerrainInput) -> Dict:
             {"name": s.name, "altitude_deg": round(s.altitude_deg, 1), "azimuth_deg": s.azimuth_deg}
             for s in sun_cases
         ],
+        "zone_analyse": terrain.zone_analyse,
+        "cells_zone": total,
     }
 
-    return {
-        "pas_grille_m": pas,
-        "largeur": W,
-        "hauteur": H,
-        "cells": cells,
-        "resume": resume,
-    }
+    return {"pas_grille_m": pas, "largeur": W, "hauteur": H, "cells": cells, "resume": resume}
 
 
 # -------------------------------------------------------------------
@@ -467,14 +613,14 @@ def reverse_city(latitude: float, longitude: float) -> dict:
 
 
 # -------------------------------------------------------------------
-# Exposition précise (pvlib) - ✅ multi-blocs maison/extension
+# Exposition précise (pvlib) - multi-blocs maison/extension
 # -------------------------------------------------------------------
 def compute_exposition_precise(terrain: TerrainInput) -> Dict:
     pas_grille = float(terrain.pas_grille_m)
     W = float(terrain.parcelle.largeur)
     H = float(terrain.parcelle.hauteur)
 
-    date = terrain.date_ref  # "YYYY-MM-DD"
+    date = terrain.date_ref
     tz = terrain.timezone
     pas_min = int(terrain.pas_minutes)
 
@@ -485,7 +631,12 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
     end = pd.Timestamp(f"{date} {terrain.heure_fin:02d}:00:00", tz=tz)
     times = pd.date_range(start=start, end=end, freq=f"{pas_min}min", inclusive="left")
 
-    solpos = get_solarposition(times, latitude=float(terrain.latitude), longitude=float(terrain.longitude))
+    solpos = get_solarposition(
+        times,
+        latitude=float(terrain.latitude),
+        longitude=float(terrain.longitude),
+    )
+
     altitudes = solpos["apparent_elevation"].to_numpy()
     azimuths = solpos["azimuth"].to_numpy()
 
@@ -495,23 +646,36 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
     cells = []
     counts = {"ombre": 0, "mi_ombre": 0, "plein_soleil": 0}
 
-    valid_sun = [(float(alt), float(az)) for alt, az in zip(altitudes, azimuths) if float(alt) > 0.0]
+    valid_sun = [
+        (float(alt), float(az))
+        for alt, az in zip(altitudes, azimuths)
+        if float(alt) > 0.0
+    ]
+
     max_steps = len(valid_sun)
     max_minutes = max_steps * pas_min
 
+    # -------------------------------------------------
+    # Boucle grille
+    # -------------------------------------------------
     for iy in range(ny):
         for ix in range(nx):
             x = (ix + 0.5) * pas_grille
             y = (iy + 0.5) * pas_grille
 
+            # Filtre zone
+            if not _cell_in_zone(x, y, terrain):
+                continue
+
             sunny_steps = 0
             for alt, az in valid_sun:
-                if not _is_in_shadow_by_any_house((x, y), terrain, alt, az):
+                if not _is_in_shadow_by_any_obstacle((x, y), terrain, alt, az):
                     sunny_steps += 1
 
             minutes_soleil = sunny_steps * pas_min
 
             ratio = 0.0 if max_minutes == 0 else minutes_soleil / max_minutes
+
             if ratio <= 0.25:
                 classe = "ombre"
             elif ratio <= 0.60:
@@ -520,9 +684,48 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
                 classe = "plein_soleil"
 
             counts[classe] += 1
-            cells.append({"x": round(x, 3), "y": round(y, 3), "score": int(minutes_soleil), "classe": classe})
 
-    total = max(1, len(cells))
+            cells.append({
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "score": int(minutes_soleil),
+                "classe": classe
+            })
+
+    # -------------------------------------------------
+    # Gestion zone vide
+    # -------------------------------------------------
+    total = len(cells)
+
+    loc = reverse_city(float(terrain.latitude), float(terrain.longitude))
+
+    if total == 0:
+        resume = {
+            "date_ref": terrain.date_ref,
+            "timezone": terrain.timezone,
+            "pas_minutes": pas_min,
+            "plage": f"{terrain.heure_debut:02d}:00-{terrain.heure_fin:02d}:00",
+            "max_minutes_theorique": int(max_minutes),
+            "pct_ombre": 0.0,
+            "pct_mi_ombre": 0.0,
+            "pct_plein_soleil": 0.0,
+            "zone_analyse": terrain.zone_analyse,
+            "cells_zone": 0,
+            "location": loc,
+            "warning": "Zone vide : aucune cellule dans la zone_analyse."
+        }
+
+        return {
+            "pas_grille_m": pas_grille,
+            "largeur": W,
+            "hauteur": H,
+            "cells": [],
+            "resume": resume,
+        }
+
+    # -------------------------------------------------
+    # Resume normal
+    # -------------------------------------------------
     resume = {
         "date_ref": terrain.date_ref,
         "timezone": terrain.timezone,
@@ -532,9 +735,15 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
         "pct_ombre": round(100 * counts["ombre"] / total, 1),
         "pct_mi_ombre": round(100 * counts["mi_ombre"] / total, 1),
         "pct_plein_soleil": round(100 * counts["plein_soleil"] / total, 1),
+        "zone_analyse": terrain.zone_analyse,
+        "cells_zone": total,
+        "location": loc,
     }
 
-    loc = reverse_city(float(terrain.latitude), float(terrain.longitude))
-    resume["location"] = loc
-
-    return {"pas_grille_m": pas_grille, "largeur": W, "hauteur": H, "cells": cells, "resume": resume}
+    return {
+        "pas_grille_m": pas_grille,
+        "largeur": W,
+        "hauteur": H,
+        "cells": cells,
+        "resume": resume,
+    }
