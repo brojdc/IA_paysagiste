@@ -1,6 +1,16 @@
-# core/schema.py
+# core/schemas.py
 from typing import List, Tuple, Optional, Literal
+
 from pydantic import BaseModel, Field
+
+
+class ExpositionV2Input(BaseModel):
+    lat: float
+    lon: float
+    date: str
+    timezone: str
+    north_offset: float
+    step_minutes: int = 30
 
 
 # -------------------------
@@ -23,20 +33,27 @@ class Trou(BaseModel):
     rayon: Optional[float] = Field(None, ge=0, description="Rayon si cercle")
 
 
+class ObstacleSegment(BaseModel):
+    type: Literal["haie", "mur"]
+    a: Tuple[float, float] = Field(..., description="Point A (x, y)")
+    b: Tuple[float, float] = Field(..., description="Point B (x, y)")
+    hauteur: float = Field(2.0, ge=0, description="Hauteur (m)")
+
+
 # -------------------------
 # Entrée principale terrain
 # -------------------------
 class TerrainInput(BaseModel):
     parcelle: Rectangle2D
+    zone_analyse: Optional[dict] = None
 
-    # NOUVEAU : plusieurs blocs maison (maison principale + extensions)
+    # plusieurs blocs maison (maison principale + extensions)
     maisons: List[Maison] = Field(
         default_factory=list,
         description="Liste des blocs de maison (maison principale + extensions).",
     )
 
-    # COMPATIBILITÉ : si tu veux garder l'ancien champ 'maison' encore un moment
-    # -> tu peux le remplir depuis l'UI et le backend peut convertir maison -> maisons
+    # compat: ancienne version (une seule maison)
     maison: Optional[Maison] = Field(
         default=None,
         description="(Compat) Ancienne version: une seule maison. Si renseigné, à convertir en 'maisons'.",
@@ -44,6 +61,12 @@ class TerrainInput(BaseModel):
 
     terrasse: Rectangle2D
     trous_terrasse: List[Trou] = Field(default_factory=list)
+
+    # Haies/murs sous forme de segments
+    obstacles: List[ObstacleSegment] = Field(
+        default_factory=list,
+        description="Haies/murs sous forme de segments",
+    )
 
     orientation_nord_deg: float = Field(0.0, description="Orientation du nord en degres (0 = nord en haut)")
     latitude: float = Field(48.8566, description="Latitude du terrain (ex: Paris = 48.8566)")

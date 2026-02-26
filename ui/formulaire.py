@@ -2,6 +2,7 @@
 import math
 from typing import Any, Dict, List
 
+import pandas as pd
 import requests
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -71,9 +72,21 @@ def _get_maison_shapes_from_payload(terrain: Dict[str, Any]) -> List[Dict[str, A
 # ----------------------------
 st.subheader("Recommandation de plantes (catalogue)")
 
-exposition_filtre = st.selectbox("Exposition", ["(peu importe)", "plein_soleil", "mi_ombre", "ombre"], key="pl_expo")
-sol_filtre = st.selectbox("Type de sol", ["(peu importe)", "drainant", "normal", "argileux", "humide"], key="pl_sol")
-climat_filtre = st.selectbox("Climat", ["(peu importe)", "oceanique", "continental", "mediterraneen", "montagnard"], key="pl_climat")
+exposition_filtre = st.selectbox(
+    "Exposition",
+    ["(peu importe)", "plein_soleil", "mi_ombre", "ombre"],
+    key="pl_expo",
+)
+sol_filtre = st.selectbox(
+    "Type de sol",
+    ["(peu importe)", "drainant", "normal", "argileux", "humide"],
+    key="pl_sol",
+)
+climat_filtre = st.selectbox(
+    "Climat",
+    ["(peu importe)", "oceanique", "continental", "mediterraneen", "montagnard"],
+    key="pl_climat",
+)
 
 if st.button("Recommander des plantes"):
     payload_plantes = {
@@ -92,7 +105,9 @@ if st.button("Recommander des plantes"):
             st.info("Aucune plante ne correspond aux filtres.")
         else:
             for p in data["plantes"]:
-                st.write(f"{p['nom']} — {p['type']} | {p['exposition']} | sol {p['sol']} | climat {p['climat']}")
+                st.write(
+                    f"{p['nom']} — {p['type']} | {p['exposition']} | sol {p['sol']} | climat {p['climat']}"
+                )
                 if p.get("notes"):
                     st.caption(p["notes"])
     except requests.exceptions.RequestException as e:
@@ -105,15 +120,121 @@ st.divider()
 # Formulaire terrain
 # ----------------------------
 st.subheader("Parcelle")
-parcelle_largeur = st.number_input("Largeur de la parcelle (m)", min_value=0.0, value=40.0, step=0.5)
-parcelle_hauteur = st.number_input("Longueur/Hauteur de la parcelle (m)", min_value=0.0, value=30.0, step=0.5)
+parcelle_largeur = st.number_input(
+    "Largeur de la parcelle (m)", min_value=0.0, value=40.0, step=0.5
+)
+parcelle_hauteur = st.number_input(
+    "Longueur/Hauteur de la parcelle (m)", min_value=0.0, value=30.0, step=0.5
+)
+
+# ----------------------------
+# Zone à analyser (zone_analyse)
+# ----------------------------
+st.subheader("Zone à analyser")
+
+zone_mode = st.radio(
+    "Quelle zone veux-tu analyser ?",
+    ["Tout le jardin", "Côté maison", "Fond du jardin", "Rectangle personnalisé"],
+    horizontal=True,
+)
+
+zone_analyse: Dict[str, Any] = {"type": "tout"}  # default
+
+if zone_mode == "Tout le jardin":
+    zone_analyse = {"type": "tout"}
+
+elif zone_mode == "Côté maison":
+    zone_analyse = {"type": "cote_maison"}
+    st.caption("Analyse uniquement la bande côté maison (bas du plan).")
+
+elif zone_mode == "Fond du jardin":
+    zone_analyse = {"type": "fond"}
+    st.caption("Analyse uniquement le fond de jardin (haut du plan).")
+
+elif zone_mode == "Rectangle personnalisé":
+    st.caption("Définis un rectangle : gauche/bas + largeur/hauteur.")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        rect_gauche = st.number_input(
+            "Gauche (m)", min_value=0.0, value=0.0, step=0.5, key="zone_x"
+        )
+        rect_largeur = st.number_input(
+            "Largeur zone (m)", min_value=0.5, value=10.0, step=0.5, key="zone_w"
+        )
+
+    with col2:
+        rect_bas = st.number_input(
+            "Bas (m)", min_value=0.0, value=0.0, step=0.5, key="zone_y"
+        )
+        rect_hauteur = st.number_input(
+            "Hauteur zone (m)", min_value=0.5, value=10.0, step=0.5, key="zone_h"
+        )
+
+    rect_largeur = min(
+        float(rect_largeur), max(0.5, float(parcelle_largeur) - float(rect_gauche))
+    )
+    rect_hauteur = min(
+        float(rect_hauteur), max(0.5, float(parcelle_hauteur) - float(rect_bas))
+    )
+
+    zone_analyse = {
+        "type": "rectangle",
+        "x": float(rect_gauche),
+        "y": float(rect_bas),
+        "w": float(rect_largeur),
+        "h": float(rect_hauteur),
+    }
+
+    st.info(
+        f"Zone: x={zone_analyse['x']} y={zone_analyse['y']} "
+        f"w={zone_analyse['w']} h={zone_analyse['h']}"
+    )
+
+# ----------------------------
+# Haies / murs (obstacles segments)
+# ----------------------------
+st.subheader("Haies / murs (obstacles)")
+
+use_obstacles = st.checkbox("Ajouter des haies / murs ?", value=False)
+obstacles: List[Dict[str, Any]] = []
+
+if use_obstacles:
+    nb_obs = st.number_input("Nombre d'obstacles", min_value=1, max_value=20, value=1, step=1)
+    for i in range(int(nb_obs)):
+        st.markdown(f"**Obstacle {i+1}**")
+        otype = st.selectbox("Type", ["haie", "mur"], key=f"obs_type_{i}")
+        colA, colB = st.columns(2)
+
+        with colA:
+            axp = st.number_input("A.x (m)", min_value=0.0, value=0.0, step=0.5, key=f"obs_ax_{i}")
+            ayp = st.number_input("A.y (m)", min_value=0.0, value=0.0, step=0.5, key=f"obs_ay_{i}")
+
+        with colB:
+            bxp = st.number_input("B.x (m)", min_value=0.0, value=10.0, step=0.5, key=f"obs_bx_{i}")
+            byp = st.number_input("B.y (m)", min_value=0.0, value=0.0, step=0.5, key=f"obs_by_{i}")
+
+        h = st.number_input("Hauteur (m)", min_value=0.0, value=2.0, step=0.1, key=f"obs_h_{i}")
+
+        obstacles.append(
+            {
+                "type": otype,
+                "a": [float(axp), float(ayp)],
+                "b": [float(bxp), float(byp)],
+                "hauteur": float(h),
+            }
+        )
+
+    st.caption("Astuce : teste en hiver (2026-12-21) ou augmente la hauteur pour voir une ombre plus marquée.")
 
 st.subheader("Maison (bloc principal)")
 maison_x = st.number_input("Position X (m)", min_value=0.0, value=10.0, step=0.5, key="m0_x")
 maison_y = st.number_input("Position Y (m)", min_value=0.0, value=10.0, step=0.5, key="m0_y")
 maison_largeur = st.number_input("Largeur (m)", min_value=0.0, value=12.0, step=0.5, key="m0_w")
 maison_hauteur = st.number_input("Longueur/Hauteur (m)", min_value=0.0, value=10.0, step=0.5, key="m0_h")
-maison_hauteur_batiment = st.number_input("Hauteur du batiment (m)", min_value=0.0, value=10.0, step=0.5, key="m0_z")
+maison_hauteur_batiment = st.number_input(
+    "Hauteur du batiment (m)", min_value=0.0, value=10.0, step=0.5, key="m0_z"
+)
 
 st.subheader("Extensions de la maison (optionnel)")
 use_extensions = st.checkbox("Ajouter des extensions ?", value=True)
@@ -123,11 +244,21 @@ if use_extensions:
     nb_ext = st.number_input("Nombre d'extensions", min_value=1, max_value=20, value=1, step=1)
     for i in range(int(nb_ext)):
         st.markdown(f"**Extension {i+1}**")
-        ex = st.number_input(f"Position X extension {i+1} (m)", min_value=0.0, value=25.0, step=0.5, key=f"ex_x_{i}")
-        ey = st.number_input(f"Position Y extension {i+1} (m)", min_value=0.0, value=10.0, step=0.5, key=f"ex_y_{i}")
-        ew = st.number_input(f"Largeur extension {i+1} (m)", min_value=0.0, value=8.0, step=0.5, key=f"ex_w_{i}")
-        eh = st.number_input(f"Hauteur extension {i+1} (m)", min_value=0.0, value=6.0, step=0.5, key=f"ex_h_{i}")
-        ez = st.number_input(f"Hauteur extension {i+1} (m)", min_value=0.0, value=10.0, step=0.5, key=f"ex_z_{i}")
+        ex = st.number_input(
+            f"Position X extension {i+1} (m)", min_value=0.0, value=25.0, step=0.5, key=f"ex_x_{i}"
+        )
+        ey = st.number_input(
+            f"Position Y extension {i+1} (m)", min_value=0.0, value=10.0, step=0.5, key=f"ex_y_{i}"
+        )
+        ew = st.number_input(
+            f"Largeur extension {i+1} (m)", min_value=0.0, value=8.0, step=0.5, key=f"ex_w_{i}"
+        )
+        eh = st.number_input(
+            f"Hauteur extension {i+1} (m)", min_value=0.0, value=6.0, step=0.5, key=f"ex_h_{i}"
+        )
+        ez = st.number_input(
+            f"Hauteur extension {i+1} (m)", min_value=0.0, value=10.0, step=0.5, key=f"ex_z_{i}"
+        )
         extensions.append({"origine": [ex, ey], "largeur": ew, "hauteur": eh, "hauteur_batiment": ez})
 
 
@@ -164,8 +295,12 @@ else:
     largeur = st.number_input("Largeur terrasse (m)", min_value=0.5, value=8.0, step=0.5, disabled=full_width)
     offset = st.number_input("Décalage (offset) le long du bloc (m)", value=0.0, step=0.5)
 
-    terrasse_auto = compute_terrasse_attachee(bloc, side, float(profondeur), float(largeur), float(offset), bool(full_width))
-    st.info(f"Terrasse auto calculée : origine={terrasse_auto['origine']}, largeur={terrasse_auto['largeur']}, hauteur={terrasse_auto['hauteur']}")
+    terrasse_auto = compute_terrasse_attachee(
+        bloc, side, float(profondeur), float(largeur), float(offset), bool(full_width)
+    )
+    st.info(
+        f"Terrasse auto calculée : origine={terrasse_auto['origine']}, largeur={terrasse_auto['largeur']}, hauteur={terrasse_auto['hauteur']}"
+    )
 
     terrasse_x = float(terrasse_auto["origine"][0])
     terrasse_y = float(terrasse_auto["origine"][1])
@@ -178,9 +313,54 @@ else:
 # ----------------------------
 st.subheader("Paramètres d'exposition")
 orientation_nord_deg = st.number_input("Orientation nord (degrés)", value=0.0, step=5.0)
-latitude = st.number_input("Latitude", value=48.8566, step=0.0001, format="%.6f")
-longitude = st.number_input("Longitude", value=2.3522, step=0.0001, format="%.6f")
-pas_grille_m = st.number_input("Pas de grille (m)", min_value=0.5, value=1.0, step=0.5)
+
+# ----------------------------
+# Localisation (optionnel) : CP/Ville -> lat/lon
+# ----------------------------
+st.subheader("Localisation (optionnel)")
+
+use_loc = st.checkbox("Déduire latitude/longitude via CP + ville (CSV local)", value=False)
+if use_loc:
+    code_postal = st.text_input("Code postal", value="59000")
+    ville = st.text_input("Ville", value="Lille")
+    try:
+        df = pd.read_csv("data/communes.csv")
+        match = df[
+            (df["code_postal"].astype(str) == str(code_postal))
+            & (df["ville"].astype(str).str.lower() == str(ville).lower())
+        ]
+        if not match.empty:
+            lat_auto = float(match.iloc[0]["latitude"])
+            lon_auto = float(match.iloc[0]["longitude"])
+            st.success(f"{ville} → lat={lat_auto}, lon={lon_auto}")
+        else:
+            lat_auto = None
+            lon_auto = None
+            st.warning("Ville/CP non trouvés dans la base locale.")
+    except Exception as e:
+        lat_auto = None
+        lon_auto = None
+        st.warning(f"Impossible de lire data/communes.csv : {e}")
+else:
+    lat_auto = None
+    lon_auto = None
+
+latitude = st.number_input(
+    "Latitude",
+    value=float(lat_auto) if lat_auto is not None else 48.8566,
+    step=0.0001,
+    format="%.6f",
+    key="lat_input",
+)
+longitude = st.number_input(
+    "Longitude",
+    value=float(lon_auto) if lon_auto is not None else 2.3522,
+    step=0.0001,
+    format="%.6f",
+    key="lon_input",
+)
+
+pas_grille_m = st.number_input("Pas de grille (m)", min_value=0.5, value=1.0, step=0.5, key="pas_grille")
 
 st.subheader("Paramètres solaires (exposition précise)")
 timezone = st.text_input("Timezone (IANA)", value="Europe/Paris")
@@ -219,7 +399,42 @@ st.divider()
 # ----------------------------
 # Dessins
 # ----------------------------
-def draw_plan(plan: Dict[str, Any], parcelle_w: float, parcelle_h: float) -> None:
+def _draw_zone_overlay(ax, za: Dict[str, Any], W: float, H: float) -> None:
+    if not za:
+        return
+
+    zt = za.get("type")
+
+    if zt == "rectangle":
+        x = float(za.get("x", 0.0))
+        y = float(za.get("y", 0.0))
+        w = float(za.get("w", 0.0))
+        h = float(za.get("h", 0.0))
+        ax.add_patch(Rectangle((x, y), w, h, fill=False, linestyle="--", linewidth=2))
+        ax.text(x, y, "Zone analyse", fontsize=8)
+
+    elif zt == "fond":
+        y0 = float(H) * 0.66
+        ax.add_patch(Rectangle((0, y0), float(W), float(H) - y0, fill=False, linestyle="--", linewidth=2))
+        ax.text(0, y0, "Zone fond", fontsize=8)
+
+    elif zt == "cote_maison":
+        y1 = float(H) * 0.33
+        ax.add_patch(Rectangle((0, 0), float(W), y1, fill=False, linestyle="--", linewidth=2))
+        ax.text(0, 0, "Zone côté maison", fontsize=8)
+
+
+def _draw_obstacles(ax, obstacles_payload: List[Dict[str, Any]]) -> None:
+    if not obstacles_payload:
+        return
+    for i, obs in enumerate(obstacles_payload, start=1):
+        a = obs.get("a") or [0.0, 0.0]
+        b = obs.get("b") or [0.0, 0.0]
+        ax.plot([float(a[0]), float(b[0])], [float(a[1]), float(b[1])])
+        ax.text(float(a[0]), float(a[1]), f"{obs.get('type','obs')} {i}", fontsize=8)
+
+
+def draw_plan(plan: Dict[str, Any], parcelle_w: float, parcelle_h: float, terrain_payload: Dict[str, Any]) -> None:
     fig, ax = plt.subplots()
     for s in plan["shapes"]:
         if s["type"] == "rectangle":
@@ -228,6 +443,9 @@ def draw_plan(plan: Dict[str, Any], parcelle_w: float, parcelle_h: float) -> Non
         elif s["type"] == "cercle":
             ax.add_patch(Circle((s["x"], s["y"]), s["r"], fill=False))
             ax.text(s["x"], s["y"], s["label"])
+
+    _draw_zone_overlay(ax, terrain_payload.get("zone_analyse"), parcelle_w, parcelle_h)
+    _draw_obstacles(ax, terrain_payload.get("obstacles", []))
 
     ax.set_xlim(0, parcelle_w)
     ax.set_ylim(0, parcelle_h)
@@ -264,6 +482,9 @@ def draw_exposition(expo: Dict[str, Any], terrain: Dict[str, Any], title: str) -
 
     ax.add_patch(Rectangle((0, 0), W, H, fill=False))
 
+    _draw_zone_overlay(ax, terrain.get("zone_analyse"), W, H)
+    _draw_obstacles(ax, terrain.get("obstacles", []))
+
     for i, m in enumerate(_get_maison_shapes_from_payload(terrain), start=1):
         label = "Maison" if i == 1 else f"Ext {i-1}"
         ax.add_patch(Rectangle((m["origine"][0], m["origine"][1]), m["largeur"], m["hauteur"], fill=False))
@@ -288,7 +509,12 @@ def draw_exposition(expo: Dict[str, Any], terrain: Dict[str, Any], title: str) -
     st.json(expo["resume"])
 
 
-def draw_plantation(placements: List[Dict[str, Any]], terrain: Dict[str, Any], parcelle_w: float, parcelle_h: float) -> None:
+def draw_plantation(
+    placements: List[Dict[str, Any]],
+    terrain: Dict[str, Any],
+    parcelle_w: float,
+    parcelle_h: float,
+) -> None:
     fig, ax = plt.subplots()
     ax.set_xlim(0, parcelle_w)
     ax.set_ylim(0, parcelle_h)
@@ -298,6 +524,9 @@ def draw_plantation(placements: List[Dict[str, Any]], terrain: Dict[str, Any], p
     ax.set_title("Plantation (points)")
 
     ax.add_patch(Rectangle((0, 0), parcelle_w, parcelle_h, fill=False))
+
+    _draw_zone_overlay(ax, terrain.get("zone_analyse"), parcelle_w, parcelle_h)
+    _draw_obstacles(ax, terrain.get("obstacles", []))
 
     for m in _get_maison_shapes_from_payload(terrain):
         ax.add_patch(Rectangle((m["origine"][0], m["origine"][1]), m["largeur"], m["hauteur"], fill=False))
@@ -332,6 +561,8 @@ def build_terrain_payload() -> Dict[str, Any]:
 
     return {
         "parcelle": {"origine": [0, 0], "largeur": parcelle_largeur, "hauteur": parcelle_hauteur},
+        "zone_analyse": zone_analyse,
+        "obstacles": obstacles,  # ✅ ENVOI HAIES/MURS
         "maisons": maisons,
         "maison": None,
         "terrasse": {"origine": [terrasse_x, terrasse_y], "largeur": terrasse_largeur, "hauteur": terrasse_hauteur},
@@ -363,15 +594,23 @@ if st.button("Lancer l'analyse"):
 
         plan = requests.post(f"{API_URL}/plan_2d", json=payload, timeout=20)
         plan.raise_for_status()
-        draw_plan(plan.json(), parcelle_largeur, parcelle_hauteur)
+        draw_plan(plan.json(), float(parcelle_largeur), float(parcelle_hauteur), payload)
 
         expo = requests.post(f"{API_URL}/exposition", json=payload, timeout=60)
         expo.raise_for_status()
-        draw_exposition(expo.json(), payload, "Exposition (simplifiée) : ombre / mi-ombre / plein soleil")
+        data_expo = expo.json()
+        draw_exposition(data_expo, payload, "Exposition (simplifiée) : ombre / mi-ombre / plein soleil")
+        resume_expo = data_expo.get("resume", {})
+        if "warning" in resume_expo:
+            st.warning(resume_expo["warning"])
 
         expo_p = requests.post(f"{API_URL}/exposition_precise", json=payload, timeout=120)
         expo_p.raise_for_status()
-        draw_exposition(expo_p.json(), payload, "Exposition précise : ombre / mi-ombre / plein soleil")
+        data_expo_p = expo_p.json()
+        draw_exposition(data_expo_p, payload, "Exposition précise : ombre / mi-ombre / plein soleil")
+        resume_expo_p = data_expo_p.get("resume", {})
+        if "warning" in resume_expo_p:
+            st.warning(resume_expo_p["warning"])
 
     except Exception as e:
         st.error(f"Impossible de contacter l'API : {e}")
@@ -384,8 +623,16 @@ st.divider()
 # ----------------------------
 st.subheader("Plantation automatique (selon exposition précise)")
 
-sol_pl = st.selectbox("Filtre sol (plantation)", ["(peu importe)", "drainant", "normal", "argileux", "humide"], key="sol_pl_auto")
-climat_pl = st.selectbox("Filtre climat (plantation)", ["(peu importe)", "oceanique", "continental", "mediterraneen", "montagnard"], key="climat_pl_auto")
+sol_pl = st.selectbox(
+    "Filtre sol (plantation)",
+    ["(peu importe)", "drainant", "normal", "argileux", "humide"],
+    key="sol_pl_auto",
+)
+climat_pl = st.selectbox(
+    "Filtre climat (plantation)",
+    ["(peu importe)", "oceanique", "continental", "mediterraneen", "montagnard"],
+    key="climat_pl_auto",
+)
 
 if st.button("Proposer une plantation"):
     terrain_payload = build_terrain_payload()
@@ -411,7 +658,7 @@ if st.button("Proposer une plantation"):
         if len(placements) == 0:
             st.warning("Aucun placement. Essaie d'enrichir plantes.csv ou enlève les filtres sol/climat.")
         else:
-            draw_plantation(placements, terrain_payload, parcelle_largeur, parcelle_hauteur)
+            draw_plantation(placements, terrain_payload, float(parcelle_largeur), float(parcelle_hauteur))
 
     except Exception as e:
         st.error(f"Impossible de contacter l'API : {e}")
