@@ -40,6 +40,13 @@ class ObstacleSegment(BaseModel):
     hauteur: float = Field(2.0, ge=0, description="Hauteur (m)")
 
 
+class HaieAuto(BaseModel):
+    """Haïe auto-générée basée sur les côtés de la maison."""
+    cote: Literal["nord", "sud", "est", "ouest"] = Field(..., description="Côté de la maison")
+    hauteur: float = Field(2.0, ge=0, description="Hauteur de la haïe (m)")
+    epaisseur: float = Field(0.3, ge=0.1, description="Largeur/épaisseur haïe (m)")
+
+
 # -------------------------
 # Entrée principale terrain
 # -------------------------
@@ -62,7 +69,13 @@ class TerrainInput(BaseModel):
     terrasse: Rectangle2D
     trous_terrasse: List[Trou] = Field(default_factory=list)
 
-    # Haies/murs sous forme de segments
+    # Haies auto-générées basées sur les côtés de la maison
+    haies_auto: List[HaieAuto] = Field(
+        default_factory=list,
+        description="Haïes auto-générées sur les côtés de la maison (nord/sud/est/ouest)",
+    )
+
+    # Haies/murs sous forme de segments (ancien système, pour compatibilité)
     obstacles: List[ObstacleSegment] = Field(
         default_factory=list,
         description="Haies/murs sous forme de segments",
@@ -79,6 +92,8 @@ class TerrainInput(BaseModel):
     pas_minutes: int = Field(10, gt=0, description="Pas de temps en minutes pour l'ensoleillement")
     heure_debut: int = Field(6, ge=0, le=23, description="Heure de debut (0-23)")
     heure_fin: int = Field(21, ge=0, le=23, description="Heure de fin (0-23)")
+
+    haie_position: str = Field("À la lisière de la parcelle (recommandé)", description="Positionnement des haies: lisière ou maison")
 
     def get_blocs_maison(self) -> List[Maison]:
         """
@@ -97,6 +112,8 @@ class TerrainInput(BaseModel):
 # -------------------------
 class SurfacesOutput(BaseModel):
     surfaces_m2: dict
+    # résumé et méta-informations générées par l'API (zones, obstacles, etc.)
+    resume: Optional[dict] = None
 
 
 class CellExposition(BaseModel):
@@ -104,6 +121,13 @@ class CellExposition(BaseModel):
     y: float
     score: int
     classe: Literal["ombre", "mi_ombre", "plein_soleil"]
+
+
+class CellExpositionProgressive(BaseModel):
+    """Cellule d'exposition avec valeur continue (0-100%)."""
+    x: float
+    y: float
+    percentage: float = Field(..., ge=0, le=100, description="Pourcentage d'ensoleillement (0-100%)")
 
 
 class ExpositionOutput(BaseModel):
@@ -134,6 +158,8 @@ class Shape2D(BaseModel):
 
 class Plan2DOutput(BaseModel):
     shapes: List[Shape2D]
+    # optionally include plants placements (coordonnées et infos) pour affichage sur le plan
+    plants: Optional[List["PlantPlacement"]] = None
 
 
 class Plante(BaseModel):
@@ -151,6 +177,10 @@ class Plante(BaseModel):
     feuillage: str
     couleur: str
     notes: str
+
+    # nouveaux champs pour enrichir la base de plantes
+    photo_url: Optional[str] = None
+    exigences: Optional[str] = None
 
 
 class PlantesFiltrerInput(BaseModel):

@@ -7,6 +7,7 @@ import requests
 import streamlit as st
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Circle
+from matplotlib.colors import LinearSegmentedColormap
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -108,6 +109,10 @@ if st.button("Recommander des plantes"):
                 st.write(
                     f"{p['nom']} — {p['type']} | {p['exposition']} | sol {p['sol']} | climat {p['climat']}"
                 )
+                if p.get("photo_url"):
+                    st.image(p["photo_url"], width=120)
+                if p.get("exigences"):
+                    st.caption(f"Exigences : {p['exigences']}")
                 if p.get("notes"):
                     st.caption(p["notes"])
     except requests.exceptions.RequestException as e:
@@ -194,9 +199,53 @@ elif zone_mode == "Rectangle personnalisé":
 # ----------------------------
 # Haies / murs (obstacles segments)
 # ----------------------------
-st.subheader("Haies / murs (obstacles)")
+st.subheader("Haies - Configuration")
 
-use_obstacles = st.checkbox("Ajouter des haies / murs ?", value=False)
+# CHOIX du positionnement des haies
+haie_position = st.radio(
+    "Où positionner les haies?",
+    ["À la lisière de la parcelle (recommandé)", "Autour de la maison"],
+    horizontal=True,
+    help="Lisière = aux bords du jardin | Maison = autour du bâtiment"
+)
+
+haies_auto: List[Dict[str, Any]] = []
+
+col1, col2 = st.columns(2)
+with col1:
+    haie_nord = st.checkbox("Haie au NORD", value=False, key="haie_nord")
+    haie_sud = st.checkbox("Haie au SUD", value=False, key="haie_sud")
+
+with col2:
+    haie_est = st.checkbox("Haie à l'EST (droite)", value=False, key="haie_est")
+    haie_ouest = st.checkbox("Haie à l'OUEST (gauche)", value=False, key="haie_ouest")
+
+# paramètres communs pour les haies
+if haie_nord or haie_sud or haie_est or haie_ouest:
+    col_h, col_e = st.columns(2)
+    with col_h:
+        haie_hauteur = st.number_input("Hauteur des haies (m)", min_value=0.5, value=2.0, step=0.1, key="haie_h")
+    with col_e:
+        haie_epaisseur = st.number_input("Épaisseur haie (m)", min_value=0.1, value=0.3, step=0.05, key="haie_e")
+    
+    if haie_nord:
+        haies_auto.append({"cote": "nord", "hauteur": float(haie_hauteur), "epaisseur": float(haie_epaisseur)})
+    if haie_sud:
+        haies_auto.append({"cote": "sud", "hauteur": float(haie_hauteur), "epaisseur": float(haie_epaisseur)})
+    if haie_est:
+        haies_auto.append({"cote": "est", "hauteur": float(haie_hauteur), "epaisseur": float(haie_epaisseur)})
+    if haie_ouest:
+        haies_auto.append({"cote": "ouest", "hauteur": float(haie_hauteur), "epaisseur": float(haie_epaisseur)})
+
+if haie_position == "À la lisière de la parcelle (recommandé)":
+    st.caption("Les haies sont positionnées aux bords du jardin (lisière de la parcelle)")
+else:
+    st.caption("Les haies sont positionnées autour du bâtiment principal")
+
+# Ancien système pour obstacles personnalisés (optionnel)
+st.subheader("Obstacles personnalisés (avancé)")
+
+use_obstacles = st.checkbox("Ajouter des obstacles manuels ?", value=False)
 obstacles: List[Dict[str, Any]] = []
 
 if use_obstacles:
@@ -226,6 +275,7 @@ if use_obstacles:
         )
 
     st.caption("Astuce : teste en hiver (2026-12-21) ou augmente la hauteur pour voir une ombre plus marquée.")
+
 
 st.subheader("Maison (bloc principal)")
 maison_x = st.number_input("Position X (m)", min_value=0.0, value=10.0, step=0.5, key="m0_x")
@@ -434,7 +484,93 @@ def _draw_obstacles(ax, obstacles_payload: List[Dict[str, Any]]) -> None:
         ax.text(float(a[0]), float(a[1]), f"{obs.get('type','obs')} {i}", fontsize=8)
 
 
-def draw_plan(plan: Dict[str, Any], parcelle_w: float, parcelle_h: float, terrain_payload: Dict[str, Any]) -> None:
+def _draw_haies_auto(ax, terrain: Dict[str, Any]) -> None:
+    """Dessine les haies auto-générées (lisière ou maison)."""
+    try:
+        haies_auto = terrain.get("haies_auto", [])
+        if not haies_auto:
+            return
+        
+        # Récupère le positionnement
+        haie_position = terrain.get("haie_position", "À la lisière de la parcelle (recommandé)")
+        is_lisiere = "lisière" in haie_position.lower()
+        
+        # Récupère la parcelle et la maison
+        parcelle = terrain.get("parcelle", {"largeur": 40, "hauteur": 30})
+        parcelle_w = float(parcelle.get("largeur", 40))
+        parcelle_h = float(parcelle.get("hauteur", 30))
+        
+        maisons = terrain.get("maisons", [])
+        if not maisons:
+            return
+        
+        maison = maisons[0]
+        mx = float(maison.get("origine", [0, 0])[0])
+        my = float(maison.get("origine", [0, 0])[1])
+        ml = float(maison.get("largeur", 10))
+        mh = float(maison.get("hauteur", 10))
+        
+        # Épaisseur VISUELLE
+        visual_thickness = 0.6
+        
+        for haie in haies_auto:
+            cote = str(haie.get("cote", "")).lower()
+            
+            if is_lisiere:
+                # HAIES À LA LISIÈRE DE LA PARCELLE (bords du jardin)
+                if cote == "nord":
+                    rect = Rectangle((0, parcelle_h - visual_thickness), parcelle_w, visual_thickness, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                elif cote == "sud":
+                    rect = Rectangle((0, 0), parcelle_w, visual_thickness, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                elif cote == "est":
+                    rect = Rectangle((parcelle_w - visual_thickness, 0), visual_thickness, parcelle_h, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                elif cote == "ouest":
+                    rect = Rectangle((0, 0), visual_thickness, parcelle_h, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                else:
+                    continue
+            else:
+                # HAIES AUTOUR DE LA MAISON
+                distance = 0.5
+                if cote == "nord":
+                    rect = Rectangle((mx - distance, my + mh + distance), ml + 2 * distance, visual_thickness, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                elif cote == "sud":
+                    rect = Rectangle((mx - distance, my - distance - visual_thickness), ml + 2 * distance, visual_thickness, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                elif cote == "est":
+                    rect = Rectangle((mx + ml + distance, my - distance), visual_thickness, mh + 2 * distance, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                elif cote == "ouest":
+                    rect = Rectangle((mx - distance - visual_thickness, my - distance), visual_thickness, mh + 2 * distance, 
+                                   fill=True, facecolor="darkgreen", edgecolor="darkgreen", 
+                                   linewidth=1, zorder=25, alpha=0.9)
+                else:
+                    continue
+            
+            ax.add_patch(rect)
+            
+    except Exception as e:
+        pass
+
+
+def draw_plan(
+    plan: Dict[str, Any],
+    parcelle_w: float,
+    parcelle_h: float,
+    terrain_payload: Dict[str, Any],
+    plants: List[Dict[str, Any]] = None,
+) -> None:
     fig, ax = plt.subplots()
     for s in plan["shapes"]:
         if s["type"] == "rectangle":
@@ -446,6 +582,12 @@ def draw_plan(plan: Dict[str, Any], parcelle_w: float, parcelle_h: float, terrai
 
     _draw_zone_overlay(ax, terrain_payload.get("zone_analyse"), parcelle_w, parcelle_h)
     _draw_obstacles(ax, terrain_payload.get("obstacles", []))
+
+    # plants can be drawn on top of the plan
+    if plants:
+        for p in plants:
+            ax.scatter(p["x"], p["y"], c="green", marker="x")
+            ax.text(p["x"], p["y"], p.get("nom", ""), fontsize=6, color="green")
 
     ax.set_xlim(0, parcelle_w)
     ax.set_ylim(0, parcelle_h)
@@ -473,40 +615,98 @@ def draw_exposition(expo: Dict[str, Any], terrain: Dict[str, Any], title: str) -
         iy = int(c["y"] // pas)
         ix = min(max(ix, 0), nx - 1)
         iy = min(max(iy, 0), ny - 1)
-        grid[iy][ix] = map_val.get(c["classe"], 0)
+        grid[iy][ix] = float(c.get("score", 0))
 
-    fig, ax = plt.subplots()
-    im = ax.imshow(grid, origin="lower", extent=[0, W, 0, H], interpolation="nearest", aspect="equal")
-    cbar = fig.colorbar(im, ax=ax, ticks=[0, 1, 2])
-    cbar.ax.set_yticklabels(["ombre", "mi-ombre", "plein soleil"])
+    # Afficher le titre et légende AVANT le graphique
+    st.write(f"**{title}**")
+    st.markdown("""
+    **Légende des couleurs:**
+    - 🟨 **Jaune clair** (9) = Plein soleil ☀️
+    - 🟧 **Orange** (5-6) = Soleil moyen
+    - 🔴 **Rouille/Marron** (3-4) = Mi-ombre
+    - 🔴 **Rouge foncé** (0-1) = Ombre ⛅
+    """)
 
-    ax.add_patch(Rectangle((0, 0), W, H, fill=False))
+    # Colormap: YlOrRd inversé → Jaune (plein soleil) à Rouge (ombre)
+    fig, ax = plt.subplots(figsize=(11, 9))
+    im = ax.imshow(
+        grid,
+        origin="lower",
+        extent=[0, W, 0, H],
+        interpolation="bilinear",
+        aspect="equal",
+        cmap="YlOrRd_r",  # Inversé: Jaune clair (9) → Rouge (0)
+        vmin=0,
+        vmax=9
+    )
+    
+    cbar = fig.colorbar(im, ax=ax, label="Score d'ensoleillement")
+    cbar.set_label("Ensoleillement\n0→9", rotation=270, labelpad=25)
+    
+    # Ajouter labels directionnels sur les axes
+    ax.set_xlabel("Ouest ← X (m) → Est", fontsize=11)
+    ax.set_ylabel("Sud ← Y (m) → Nord", fontsize=11)
+    
+    # Ajouter des annotations aux coins
+    ax.text(W*0.02, H*0.98, "NO", fontsize=10, ha='left', va='top', fontweight='bold', color='gray')
+    ax.text(W*0.98, H*0.98, "NE", fontsize=10, ha='right', va='top', fontweight='bold', color='gray')
+    ax.text(W*0.02, H*0.02, "SO", fontsize=10, ha='left', va='bottom', fontweight='bold', color='gray')
+    ax.text(W*0.98, H*0.02, "SE", fontsize=10, ha='right', va='bottom', fontweight='bold', color='gray')
+    
+    ax.add_patch(Rectangle((0, 0), W, H, fill=False, linewidth=2, color="black", zorder=5))
 
     _draw_zone_overlay(ax, terrain.get("zone_analyse"), W, H)
     _draw_obstacles(ax, terrain.get("obstacles", []))
+    _draw_haies_auto(ax, terrain)
 
     for i, m in enumerate(_get_maison_shapes_from_payload(terrain), start=1):
         label = "Maison" if i == 1 else f"Ext {i-1}"
-        ax.add_patch(Rectangle((m["origine"][0], m["origine"][1]), m["largeur"], m["hauteur"], fill=False))
-        ax.text(m["origine"][0], m["origine"][1], label)
+        ax.add_patch(Rectangle((m["origine"][0], m["origine"][1]), m["largeur"], m["hauteur"], fill=False, linewidth=1.5))
+        ax.text(m["origine"][0], m["origine"][1], label, fontsize=9, fontweight="bold")
 
     t = terrain["terrasse"]
-    ax.add_patch(Rectangle((t["origine"][0], t["origine"][1]), t["largeur"], t["hauteur"], fill=False))
+    ax.add_patch(Rectangle((t["origine"][0], t["origine"][1]), t["largeur"], t["hauteur"], fill=False, linewidth=1, linestyle="--"))
 
     for tr in terrain.get("trous_terrasse", []):
         if tr["forme"] == "rectangle" and tr.get("dimensions"):
             w, h = tr["dimensions"]
-            ax.add_patch(Rectangle((tr["position"][0], tr["position"][1]), w, h, fill=False))
+            ax.add_patch(Rectangle((tr["position"][0], tr["position"][1]), w, h, fill=False, color="gray"))
         elif tr["forme"] == "cercle" and tr.get("rayon") is not None:
-            ax.add_patch(Circle((tr["position"][0], tr["position"][1]), tr["rayon"], fill=False))
+            ax.add_patch(Circle((tr["position"][0], tr["position"][1]), tr["rayon"], fill=False, color="gray"))
 
-    ax.set_xlabel("x (m)")
-    ax.set_ylabel("y (m)")
-    ax.set_title(title)
+    ax.set_title(title, fontsize=14, fontweight="bold")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
     st.pyplot(fig)
 
-    st.write("Résumé")
-    st.json(expo["resume"])
+    # DEBUG: Afficher les infos haies/maisons
+    haies = terrain.get("haies_auto", [])
+    maisons = terrain.get("maisons", [])
+    if haies or maisons:
+        col_debug1, col_debug2 = st.columns(2)
+        with col_debug1:
+            if haies:
+                st.caption(f"Haies dessinées: {', '.join([h.get('cote', '?') for h in haies])}")
+            else:
+                st.caption("Aucune haie")
+        with col_debug2:
+            st.caption(f"Maisons: {len(maisons)}")
+
+    st.write("**Résumé d'exposition**")
+    resume = expo.get("resume", {})
+    
+    # Afficher les infos de l'analyse
+    heure_debut = terrain.get("heure_debut", 6)
+    heure_fin = terrain.get("heure_fin", 18)
+    st.caption(f"Analyse: {heure_debut}:00 → {heure_fin}:00 | Pas: {terrain.get('pas_minutes', 10)} min")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Plein soleil", f"{resume.get('pct_plein_soleil', 0):.1f}%")
+    with col2:
+        st.metric("Mi-ombre", f"{resume.get('pct_mi_ombre', 0):.1f}%")
+    with col3:
+        st.metric("Ombre", f"{resume.get('pct_ombre', 0):.1f}%")
 
 
 def draw_plantation(
@@ -551,26 +751,37 @@ def draw_plantation(
 # Payload
 # ----------------------------
 def build_terrain_payload() -> Dict[str, Any]:
+    """Construire le payload à envoyer à l'API."""
     maison_principale = {
-        "origine": [maison_x, maison_y],
-        "largeur": maison_largeur,
-        "hauteur": maison_hauteur,
-        "hauteur_batiment": maison_hauteur_batiment,
+        "origine": [float(maison_x), float(maison_y)],
+        "largeur": float(maison_largeur),
+        "hauteur": float(maison_hauteur),
+        "hauteur_batiment": float(maison_hauteur_batiment),
     }
-    maisons = [maison_principale] + extensions
+    maisons = [maison_principale] + (extensions if extensions else [])
 
     return {
-        "parcelle": {"origine": [0, 0], "largeur": parcelle_largeur, "hauteur": parcelle_hauteur},
-        "zone_analyse": zone_analyse,
-        "obstacles": obstacles,  # ✅ ENVOI HAIES/MURS
+        "parcelle": {
+            "origine": [0.0, 0.0],
+            "largeur": float(parcelle_largeur),
+            "hauteur": float(parcelle_hauteur),
+        },
+        "zone_analyse": zone_analyse if zone_analyse else {"type": "tout"},
+        "haies_auto": haies_auto,
+        "haie_position": haie_position,  # "À la lisière..." ou "Autour de la maison"
+        "obstacles": obstacles,
         "maisons": maisons,
         "maison": None,
-        "terrasse": {"origine": [terrasse_x, terrasse_y], "largeur": terrasse_largeur, "hauteur": terrasse_hauteur},
-        "trous_terrasse": trous_terrasse,
-        "orientation_nord_deg": orientation_nord_deg,
-        "latitude": latitude,
-        "longitude": longitude,
-        "pas_grille_m": pas_grille_m,
+        "terrasse": {
+            "origine": [float(terrasse_x), float(terrasse_y)],
+            "largeur": float(terrasse_largeur),
+            "hauteur": float(terrasse_hauteur),
+        },
+        "trous_terrasse": trous_terrasse if trous_terrasse else [],
+        "orientation_nord_deg": float(orientation_nord_deg),
+        "latitude": float(latitude),
+        "longitude": float(longitude),
+        "pas_grille_m": float(pas_grille_m),
         "timezone": timezone,
         "date_ref": date_ref,
         "pas_minutes": int(pas_minutes),
@@ -584,30 +795,58 @@ def build_terrain_payload() -> Dict[str, Any]:
 # ----------------------------
 if st.button("Lancer l'analyse"):
     payload = build_terrain_payload()
+    
+    # DEBUG: Afficher les haies détectées
+    if payload.get("haies_auto"):
+        st.info(f"Haies détectées: {len(payload['haies_auto'])} haie(s) - {[h.get('cote') for h in payload['haies_auto']]}")
+    else:
+        st.warning("Aucune haie sélectionnée")
+    
     try:
         r = requests.post(f"{API_URL}/analyser", json=payload, timeout=20)
         if r.status_code != 200:
             st.error(f"Erreur API ({r.status_code}) : {r.text}")
             st.stop()
         st.success("Analyse surfaces terminée.")
-        st.json(r.json())
+        result = r.json()
+        # affichage des surfaces et résumé intelligemment
+        surfaces = result.get("surfaces_m2", {})
+        resume = result.get("resume", {})
+        st.subheader("Résumé du jardin")
+        for name, val in surfaces.items():
+            st.markdown(f"- **{name}** : {val} m²")
+        if "zone_analyse" in resume and resume["zone_analyse"]:
+            st.markdown(f"- Zone d'analyse : {resume['zone_analyse']}")
+        st.markdown(f"- Nombre d'obstacles (haies/murs) : {resume.get('nb_obstacles', 0)}")
+        st.markdown(f"- Nombre de bâtiments : {resume.get('nb_batiments', 0)}")
 
+        # récupération du plan 2D
         plan = requests.post(f"{API_URL}/plan_2d", json=payload, timeout=20)
         plan.raise_for_status()
         draw_plan(plan.json(), float(parcelle_largeur), float(parcelle_hauteur), payload)
 
+        st.divider()
+        st.subheader("Analyses d'exposition")
+        st.markdown("""
+        Deux analyses te sont proposées:
+        1. **Exposition simplifiée** = Calcul rapide basé sur des cas solaires prédéfinis
+        2. **Exposition précise** = Calcul détaillé heure par heure (10 min d'intervalle) pour plus de précision
+        """)
+
         expo = requests.post(f"{API_URL}/exposition", json=payload, timeout=60)
         expo.raise_for_status()
         data_expo = expo.json()
-        draw_exposition(data_expo, payload, "Exposition (simplifiée) : ombre / mi-ombre / plein soleil")
+        draw_exposition(data_expo, payload, "Exposition (simplifiée) : cas solaires prédéfinis")
         resume_expo = data_expo.get("resume", {})
         if "warning" in resume_expo:
             st.warning(resume_expo["warning"])
 
+        st.divider()
+
         expo_p = requests.post(f"{API_URL}/exposition_precise", json=payload, timeout=120)
         expo_p.raise_for_status()
         data_expo_p = expo_p.json()
-        draw_exposition(data_expo_p, payload, "Exposition précise : ombre / mi-ombre / plein soleil")
+        draw_exposition(data_expo_p, payload, "Exposition précise : calcul heure par heure")
         resume_expo_p = data_expo_p.get("resume", {})
         if "warning" in resume_expo_p:
             st.warning(resume_expo_p["warning"])
@@ -658,6 +897,15 @@ if st.button("Proposer une plantation"):
         if len(placements) == 0:
             st.warning("Aucun placement. Essaie d'enrichir plantes.csv ou enlève les filtres sol/climat.")
         else:
+            # on réaffiche le plan avec les plantes annotées
+            plan = requests.post(
+                f"{API_URL}/plan_2d",
+                json=terrain_payload,
+                timeout=20,
+            )
+            if plan.status_code == 200:
+                draw_plan(plan.json(), float(parcelle_largeur), float(parcelle_hauteur), terrain_payload, plants=placements)
+            # et on garde aussi le nuage de points original
             draw_plantation(placements, terrain_payload, float(parcelle_largeur), float(parcelle_hauteur))
 
     except Exception as e:

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # core/services.py
 from __future__ import annotations
 
@@ -22,6 +23,82 @@ from core.schemas import (
     PlantationPlanOutput,
     PlantPlacement,
 )
+
+
+# -------------------------------------------------------------------
+# Génération automatique des haies
+# -------------------------------------------------------------------
+def generate_obstacles_from_haies_auto(terrain: TerrainInput) -> List[dict]:
+    """
+    Génère les obstacles (segments) à partir de la liste des haies auto.
+    Peut être positionné à la lisière de la parcelle ou autour de la maison.
+    """
+    if not terrain.haies_auto:
+        return []
+    
+    obstacles = []
+    maisons = terrain.get_blocs_maison()
+    if not maisons:
+        return obstacles
+    
+    # on prend la maison principale (première)
+    maison = maisons[0]
+    mx, my = float(maison.origine[0]), float(maison.origine[1])
+    mw, mh = float(maison.largeur), float(maison.hauteur)
+    
+    # Récupère le positionnement
+    haie_position = terrain.haie_position.lower()
+    is_lisiere = "lisière" in haie_position
+    
+    # Dimensions de la parcelle
+    px, py = float(terrain.parcelle.origine[0]), float(terrain.parcelle.origine[1])
+    pw, ph = float(terrain.parcelle.largeur), float(terrain.parcelle.hauteur)
+    
+    for haie in terrain.haies_auto:
+        cote = haie.cote
+        hauteur = float(haie.hauteur)
+        
+        if is_lisiere:
+            # Haies À LA LISIÈRE DE LA PARCELLE
+            if cote == "nord":
+                a = (px, py + ph)
+                b = (px + pw, py + ph)
+            elif cote == "sud":
+                a = (px, py)
+                b = (px + pw, py)
+            elif cote == "est":
+                a = (px + pw, py)
+                b = (px + pw, py + ph)
+            elif cote == "ouest":
+                a = (px, py)
+                b = (px, py + ph)
+            else:
+                continue
+        else:
+            # Haies AUTOUR DE LA MAISON
+            if cote == "nord":
+                a = (mx, my + mh)
+                b = (mx + mw, my + mh)
+            elif cote == "sud":
+                a = (mx, my)
+                b = (mx + mw, my)
+            elif cote == "est":
+                a = (mx + mw, my)
+                b = (mx + mw, my + mh)
+            elif cote == "ouest":
+                a = (mx, my)
+                b = (mx, my + mh)
+            else:
+                continue
+        
+        obstacles.append({
+            "type": "haie",
+            "a": list(a),
+            "b": list(b),
+            "hauteur": hauteur,
+        })
+    
+    return obstacles
 
 
 # -------------------------------------------------------------------
@@ -242,7 +319,6 @@ def build_plan_2d(terrain: TerrainInput) -> List[Shape2D]:
                     r=float(t.rayon),
                 )
             )
-
     return shapes
 
 
@@ -326,10 +402,8 @@ def _is_in_shadow_by_segment(
     orientation_nord_deg: float,
     thickness: float,
 ) -> bool:
-    """
-    Ombre d'une haie/mur modélisé(e) comme segment vertical.
-    Approx : bande autour du segment + longueur d'ombre L = height/tan(alt).
-    """
+    # Shadow of a hedge/wall modeled as a vertical segment
+    # Approximation: band around segment + shadow length L = height/tan(alt)
     alt_deg = float(sun_altitude_deg)
     if alt_deg <= 0.0:
         return False  # (on ne devrait pas appeler avec alt<=0 si on filtre déjà)
@@ -383,10 +457,8 @@ def _is_in_shadow_by_house(
     sun_azimuth_deg: float,
     orientation_nord_deg: float,
 ) -> bool:
-    """
-    Test ombre approx d'un bloc rectangulaire.
-    Modèle simplifié (mais suffisant pour proto).
-    """
+    # Test approximate shadow of a rectangular block.
+    # Simplified model (but sufficient for prototype).
     alt = math.radians(max(1.0, sun_altitude_deg))
     L = house_height / math.tan(alt)
 
@@ -462,7 +534,24 @@ def _is_in_shadow_by_any_obstacle(
 
     # 2) haies / murs (segments)
     thickness = float(getattr(terrain, "pas_grille_m", 1.0)) * 0.75
-    for obs in getattr(terrain, "obstacles", []) or []:
+    
+    # obstacles manuels
+    all_obstacles = list(getattr(terrain, "obstacles", []) or [])
+    
+    # obstacles auto-générés à partir des haies
+    auto_obstacles = generate_obstacles_from_haies_auto(terrain)
+    for auto_obs in auto_obstacles:
+        from core.schemas import ObstacleSegment
+        all_obstacles.append(
+            ObstacleSegment(
+                type=auto_obs["type"],
+                a=tuple(auto_obs["a"]),
+                b=tuple(auto_obs["b"]),
+                hauteur=auto_obs["hauteur"],
+            )
+        )
+    
+    for obs in all_obstacles:
         if _is_in_shadow_by_segment(
             cell,
             (float(obs.a[0]), float(obs.a[1])),
@@ -577,6 +666,8 @@ def load_plantes() -> List[Plante]:
                     feuillage=row["feuillage"],
                     couleur=row["couleur"],
                     notes=row.get("notes", ""),
+                    photo_url=row.get("photo_url") or None,
+                    exigences=row.get("exigences") or None,
                 )
             )
     return plantes

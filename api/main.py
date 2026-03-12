@@ -51,7 +51,14 @@ def ping():
 @app.post("/analyser", response_model=SurfacesOutput)
 def analyser(donnees: TerrainInput):
     surfaces_m2 = compute_surfaces(donnees)
-    return SurfacesOutput(surfaces_m2=surfaces_m2)
+    # build un résumé basique du jardin pour aider l'UI à présenter des informations
+    resume = {
+        "zone_analyse": donnees.zone_analyse,
+        "nb_obstacles": len(getattr(donnees, "obstacles", []) or []),
+        "nb_batiments": len(donnees.get_blocs_maison()),
+        "surfaces": surfaces_m2,
+    }
+    return SurfacesOutput(surfaces_m2=surfaces_m2, resume=resume)
 
 
 @app.post("/plan_2d", response_model=Plan2DOutput)
