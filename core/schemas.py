@@ -66,7 +66,7 @@ class TerrainInput(BaseModel):
         description="(Compat) Ancienne version: une seule maison. Si renseigné, à convertir en 'maisons'.",
     )
 
-    terrasse: Rectangle2D
+    terrasse: Optional[Rectangle2D] = None
     trous_terrasse: List[Trou] = Field(default_factory=list)
 
     # Haies auto-générées basées sur les côtés de la maison
@@ -94,6 +94,10 @@ class TerrainInput(BaseModel):
     heure_fin: int = Field(21, ge=0, le=23, description="Heure de fin (0-23)")
 
     haie_position: str = Field("À la lisière de la parcelle (recommandé)", description="Positionnement des haies: lisière ou maison")
+
+    # Pente du terrain (optionnel — pour correction d'altitude solaire)
+    slope_pct: float = Field(0.0, ge=0, description="Pente du terrain en pourcentage (0 = plat)")
+    slope_orientation_deg: float = Field(0.0, description="Orientation de la pente en degrés (0=nord, 180=sud)")
 
     def get_blocs_maison(self) -> List[Maison]:
         """
@@ -166,7 +170,7 @@ class Plante(BaseModel):
     nom: str
     type: str
     exposition: Literal["plein_soleil", "mi_ombre", "ombre"]
-    sol: Literal["drainant", "normal", "argileux", "humide"]
+    sol: str  # sableux, limoneux, argileux, limono-sableux, limono-argileux, argilo-calcaire, tourbeux, caillouteux, humide, drainant…
     climat: Literal["oceanique", "continental", "mediterraneen", "montagnard"]
 
     hauteur_m: float = Field(..., ge=0)
@@ -178,14 +182,25 @@ class Plante(BaseModel):
     couleur: str
     notes: str
 
-    # nouveaux champs pour enrichir la base de plantes
+    # champs enrichis C1
     photo_url: Optional[str] = None
     exigences: Optional[str] = None
+    exposition_min_h: Optional[float] = None
+    exposition_max_h: Optional[float] = None
+    sol_prefere: Optional[str] = None
+    ph_min: Optional[float] = None
+    ph_max: Optional[float] = None
+    periode_floraison: Optional[str] = None
+    couleur_fleur: Optional[str] = None
+    persistant: Optional[bool] = None
+    rusticite_min_c: Optional[float] = None
+    entretien: Optional[str] = None    # faible / moyen / élevé
+    prix_indicatif_eur: Optional[float] = None
 
 
 class PlantesFiltrerInput(BaseModel):
     exposition: Optional[Literal["plein_soleil", "mi_ombre", "ombre"]] = None
-    sol: Optional[Literal["drainant", "normal", "argileux", "humide"]] = None
+    sol: Optional[str] = None
     climat: Optional[Literal["oceanique", "continental", "mediterraneen", "montagnard"]] = None
     type: Optional[str] = None
 
@@ -197,7 +212,7 @@ class PlantesFiltrerOutput(BaseModel):
 
 class PlantationRequest(BaseModel):
     terrain: TerrainInput
-    sol: Optional[Literal["drainant", "normal", "argileux", "humide"]] = None
+    sol: Optional[str] = None
     climat: Optional[Literal["oceanique", "continental", "mediterraneen", "montagnard"]] = None
 
 

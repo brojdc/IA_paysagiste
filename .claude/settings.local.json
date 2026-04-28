@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(cat run_api.py)",
+      "Bash(ls *.py)",
+      "Bash(python -c ' *)",
+      "Bash(node --input-type=module)",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

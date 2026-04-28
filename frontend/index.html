@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>IA Paysagiste — Éditeur de terrain</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/editor.css">
+</head>
+<body class="editor-page">
+
+  <!-- ═══ Nav ════════════════════════════════════════════════════════ -->
+  <nav class="saas-nav" id="saas-nav">
+    <a href="#" class="nav-logo">
+      <img src="/assets/logo.svg" alt="IA Paysagiste" width="28" height="28">
+      <span>IA Paysagiste</span>
+    </a>
+    <div class="nav-links">
+      <a href="#editor"    class="active" id="tab-link-editor">Éditeur</a>
+      <a href="#resultats" id="tab-link-resultats">Résultats</a>
+    </div>
+    <div class="nav-right">
+      <button class="btn-nouveau-projet" onclick="resetEditor()">+ Nouveau projet</button>
+      <div class="nav-user">
+        <div class="nav-user-avatar">P</div>
+        <span class="nav-user-name">Paysagiste</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Breadcrumb -->
+  <div class="breadcrumb" id="breadcrumb">
+    <a href="#">Mes projets</a>
+    <span class="sep">›</span>
+    <span class="current">Terrain sans titre</span>
+  </div>
+
+  <!-- ═══ Editor ═════════════════════════════════════════════════════ -->
+  <div class="editor-layout" id="editor">
+
+    <!-- ── Main (toolbar + canvas) ──────────────────────── -->
+    <div class="editor-main">
+
+      <!-- Toolbar -->
+      <div class="editor-toolbar">
+
+        <!-- Outils dessin — ordre exact spec B -->
+        <div class="toolbar-group toolbar-group-tools">
+          <span class="toolbar-label">Outils</span>
+          <button class="editor-tool-btn active" data-tool="select"
+                  onclick="selectTool('select')" title="Sélectionner / déplacer (Esc)">
+            <span class="tool-icon">↖</span> Sélection
+          </button>
+          <button class="editor-tool-btn" data-tool="house"
+                  onclick="selectTool('select')" title="La maison se déplace par drag en mode Sélection">
+            <span class="tool-icon">🏠</span> Maison
+          </button>
+          <button class="editor-tool-btn" data-tool="extension"
+                  onclick="selectTool('extension')" title="Tracer une extension de bâtiment">
+            <span class="tool-icon">🟦</span> Extension
+            <span data-tooltip="Drag pour dessiner une extension. Génère une ombre. Peut être empilée.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="terrasse"
+                  onclick="selectTool('terrasse')" title="Dessiner une terrasse (optionnel)">
+            <span class="tool-icon">🟫</span> Terrasse
+            <span data-tooltip="Drag pour dessiner la terrasse. Optionnelle — laissez vide si pas de terrasse.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="abri"
+                  onclick="selectTool('abri')" title="Placer un abri de jardin (2.2m haut)">
+            <span class="tool-icon">🏚</span> Abri jardin
+            <span data-tooltip="Drag pour placer un abri. Hauteur par défaut 2.2 m — génère de l'ombre.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="potager"
+                  onclick="selectTool('potager')" title="Délimiter un potager (sans ombre)">
+            <span class="tool-icon">🥦</span> Potager
+            <span data-tooltip="Drag pour délimiter un potager. Pas d'ombre générée.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="haie"
+                  onclick="selectTool('haie')" title="Tracer une haie ou un mur">
+            <span class="tool-icon">🌿</span> Haie
+            <span data-tooltip="Cliquez 2 points pour tracer une haie. Hauteur réglable dans le panneau.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="massif"
+                  onclick="selectTool('massif')" title="Dessiner un massif polygone">
+            <span class="tool-icon">🌸</span> Massif
+            <span data-tooltip="Cliquez pour ajouter des points. Double-cliquez pour fermer le massif.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="massif-rond"
+                  onclick="selectTool('massif-rond')" title="Dessiner un massif oval">
+            <span class="tool-icon">⭕</span> Massif rond
+            <span data-tooltip="Cliquez centre, draggez pour définir le rayon.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="trou"
+                  onclick="selectTool('trou')" title="Placer un trou de plantation">
+            <span class="tool-icon">🌱</span> Trou plant.
+            <span data-tooltip="Drag depuis le centre pour définir le rayon du trou (0.3–1.5 m). Affectez-lui une plante dans le panneau.">?</span>
+          </button>
+          <button class="editor-tool-btn" data-tool="arbre-voisin"
+                  onclick="selectTool('arbre-voisin')" title="Placer un arbre voisin (hors parcelle)">
+            <span class="tool-icon">🌳</span> Arbre voisin
+            <span data-tooltip="Drag pour définir le rayon de couronne. L'arbre projette une ombre sur votre parcelle.">?</span>
+          </button>
+        </div>
+
+        <!-- Contrôles de tracé (affiché pendant haie/massif) -->
+        <div id="draw-controls" class="toolbar-group hidden">
+          <button class="editor-tool-btn btn-finish-draw" onclick="finishDraw()" title="Terminer le tracé">
+            ✓ Terminer
+          </button>
+          <button class="editor-tool-btn btn-cancel-draw" onclick="cancelDraw()" title="Annuler le tracé">
+            ✕ Annuler
+          </button>
+        </div>
+
+        <!-- Undo/Redo + Vue (A3) -->
+        <div class="toolbar-group">
+          <span class="toolbar-label">Historique</span>
+          <button class="editor-tool-btn" onclick="undo()" title="Annuler (Ctrl+Z)">↶ Annuler</button>
+          <button class="editor-tool-btn" onclick="redo()" title="Rétablir (Ctrl+Y)">↷ Rétablir</button>
+          <button class="editor-tool-btn" onclick="fitToScreen()" title="Ajuster le plan à l'écran">⊞ Ajuster</button>
+        </div>
+
+        <!-- Simulation (A2) -->
+        <div class="toolbar-group">
+          <span class="toolbar-label">Simulation</span>
+          <button id="btn-sun-sim" class="editor-tool-btn" onclick="toggleSunSimulation()"
+                  title="Animer la position du soleil sur la journée">
+            <span class="tool-icon">☀️</span> Simuler
+          </button>
+          <select id="sun-speed-select" class="toolbar-select" title="Vitesse de l'animation">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+          <button id="btn-heatmap" class="editor-tool-btn" onclick="toggleHeatmap()"
+                  title="Carte d'ensoleillement (heatmap)">
+            <span class="tool-icon">🌡️</span> Carte solaire
+          </button>
+        </div>
+
+        <!-- Slider heure manuelle (A2) -->
+        <div class="toolbar-group toolbar-group-hour">
+          <span class="toolbar-label">Heure ☀️</span>
+          <input type="range" id="sun-hour-slider" min="6" max="21" step="0.25" value="12"
+                 class="hour-slider" title="Heure du soleil (manuel)">
+          <span id="sun-hour-label" class="hour-label">12:00</span>
+        </div>
+
+      </div><!-- /toolbar -->
+
+      <!-- Canvas -->
+      <div class="editor-wrapper" id="editor-wrapper">
+        <canvas id="terrain-canvas"></canvas>
+        <div id="sun-time-display" style="display:none;"></div>
+      </div>
+
+    </div><!-- /editor-main -->
+
+    <!-- ══════════════════════════════════════════════
+         Sidebar — Panneau de contrôle
+    ══════════════════════════════════════════════ -->
+    <div class="editor-sidebar" id="editor-sidebar">
+
+      <!-- 1. DIMENSIONS PARCELLE (éditables → plan se met à jour) -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span class="section-icon">📐</span>
+          Dimensions parcelle
+        </div>
+        <div id="synthesis-panel">
+
+          <!-- Inputs directs -->
+          <div class="sidebar-parcel-inputs">
+            <div class="parcel-field">
+              <label class="parcel-field-label">Largeur</label>
+              <div class="parcel-field-row">
+                <input type="number" id="editor-parcel-w" value="20" min="3" max="200" step="0.5"
+                       title="Largeur de la parcelle (m)" aria-label="Largeur parcelle (m)">
+                <span class="parcel-unit">m</span>
+              </div>
+            </div>
+            <div class="parcel-sep">×</div>
+            <div class="parcel-field">
+              <label class="parcel-field-label">Profondeur</label>
+              <div class="parcel-field-row">
+                <input type="number" id="editor-parcel-h" value="15" min="3" max="200" step="0.5"
+                       title="Profondeur de la parcelle (m)" aria-label="Profondeur parcelle (m)">
+                <span class="parcel-unit">m</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Surfaces calculées -->
+          <div class="synth-grid">
+            <div class="synth-card">
+              <div class="synth-card-label">Surface parcelle</div>
+              <div class="synth-card-value" id="synth-surf-parc">—</div>
+            </div>
+            <div class="synth-card">
+              <div class="synth-card-label">Surface maison</div>
+              <div class="synth-card-value" id="synth-surf-maison">—</div>
+            </div>
+            <div class="synth-card">
+              <div class="synth-card-label">Surface jardin</div>
+              <div class="synth-card-value" id="synth-surf-jard">—</div>
+            </div>
+            <div class="synth-card">
+              <div class="synth-card-label">Surface terrasse</div>
+              <div class="synth-card-value" id="synth-surf-terr">—</div>
+            </div>
+          </div>
+
+          <!-- Lignes synthèse -->
+          <div style="padding: 0.35rem 0 0.1rem;">
+            <div class="synth-row">
+              <span class="synth-row-label">Orientation parcelle</span>
+              <span class="synth-row-value" id="synth-orient-parc">—</span>
+            </div>
+            <div class="synth-row">
+              <span class="synth-row-label">Orientation maison</span>
+              <span class="synth-row-value" id="synth-orient-mais">—</span>
+            </div>
+            <div class="synth-row">
+              <span class="synth-row-label">
+                Linéaire haies
+                <span data-tooltip="Longueur totale des haies tracées.">?</span>
+              </span>
+              <span class="synth-row-value" id="synth-haies">—</span>
+            </div>
+            <div class="synth-row">
+              <span class="synth-row-label">Massifs plantés</span>
+              <span class="synth-row-value" id="synth-massifs">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. ORIENTATION -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span class="section-icon">🧭</span>
+          Orientation Nord
+          <span data-tooltip="0° = nord vers le haut. Modifie le calcul des ombres.">?</span>
+        </div>
+        <div class="north-sidebar">
+          <input type="range" id="editor-north" min="0" max="359" step="1" value="0"
+                 aria-label="Orientation du nord (degrés)" class="north-slider-wide">
+          <span class="north-val-big" id="editor-north-val">0°</span>
+        </div>
+      </div>
+
+      <!-- 3. SOL & CLIMAT -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span class="section-icon">🌱</span>
+          Sol &amp; Climat
+        </div>
+        <div class="sol-climat-grid">
+          <div class="setting-row" style="border-top:none;padding-top:0;">
+            <label>
+              Type de sol
+              <span data-tooltip="Sableux = drainant rapide, pauvre. Limoneux = idéal, fertile. Argileux = compacte, retient l'eau. Tourbeux = acide, humide. Caillouteux = ultra-drainant.">?</span>
+            </label>
+            <select id="editor-sol" aria-label="Type de sol">
+              <option value="">— Non défini —</option>
+              <option value="sableux">Sableux (drainant, léger)</option>
+              <option value="limoneux">Limoneux (équilibré, fertile)</option>
+              <option value="argileux">Argileux (lourd, retient l'eau)</option>
+              <option value="limono-sableux">Limono-sableux</option>
+              <option value="limono-argileux">Limono-argileux</option>
+              <option value="argilo-calcaire">Argilo-calcaire</option>
+              <option value="tourbeux">Tourbeux (humide, acide)</option>
+              <option value="caillouteux">Caillouteux (drainant, pauvre)</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>
+              Climat
+              <span data-tooltip="Océanique=côtes atlantiques, Continental=étés chauds, Méditerranéen=étés secs, Montagnard=altitude.">?</span>
+            </label>
+            <select id="editor-climat" aria-label="Climat">
+              <option value="">— Non défini —</option>
+              <option value="oceanique">Océanique</option>
+              <option value="continental">Continental</option>
+              <option value="mediterraneen">Méditerranéen</option>
+              <option value="montagnard">Montagnard</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. HAIES & MURS -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span class="section-icon">🌿</span>
+          Haies &amp; murs
+          <span data-tooltip="Chaque haie tracée apparaît ici. Réglez la hauteur pour affiner les ombres portées.">?</span>
+        </div>
+        <div id="hedge-list">
+          <p class="props-empty" id="hedge-empty-msg">
+            Aucune haie — utilisez l'outil Haie pour en tracer.
+          </p>
+        </div>
+      </div>
+
+      <!-- 5. SÉLECTION (propriétés) -->
+      <div class="sidebar-section" id="props-section" style="display:none;">
+        <div class="sidebar-section-title">
+          <span class="section-icon">⚙️</span>
+          <span id="props-title">Sélection</span>
+        </div>
+        <div id="props-panel">
+          <div id="props-content"></div>
+        </div>
+      </div>
+
+      <!-- 6. PENTE -->
+      <div class="sidebar-section" id="slope-section" style="display:none;">
+        <div class="sidebar-section-title">
+          <span class="section-icon">⛰️</span>
+          Pente du terrain
+          <span data-tooltip="Une pente exposée sud reçoit plus de soleil.">?</span>
+        </div>
+        <div class="slope-panel" id="slope-panel">
+          <div class="slope-toggle-row">
+            <span>Activer la pente</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="slope-enabled" onchange="onSlopeToggle(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="slope-fields" id="slope-fields" style="display:none;">
+            <div class="slope-field-row">
+              <label>Orientation
+                <span data-tooltip="Direction vers laquelle la pente descend. 180° = vers le sud.">?</span>
+              </label>
+              <input type="number" id="slope-orientation" min="0" max="359" step="5" value="180"
+                     placeholder="180°" style="width:60px;" oninput="afterChange()">
+            </div>
+            <div class="slope-field-row">
+              <label>Inclinaison (%)</label>
+              <input type="range" id="slope-steepness" min="1" max="45" step="1" value="10"
+                     oninput="setSlopeVal(this.value)" aria-label="Inclinaison">
+              <span id="slope-pct">10%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. PARAMÈTRES AVANCÉS (accordion) -->
+      <div class="sidebar-section">
+        <button class="accordion-trigger" id="acc-params-trigger"
+                onclick="toggleAccordion('acc-params')">
+          <span>⚙️ Paramètres avancés</span>
+          <span class="acc-icon">▼</span>
+        </button>
+        <div class="accordion-body" id="acc-params">
+          <div style="margin-bottom:0.5rem;">
+            <div class="setting-row" style="border-top:none;padding-top:0;">
+              <label>
+                Latitude
+                <span data-tooltip="Latitude du terrain en degrés décimaux.">?</span>
+              </label>
+              <input type="number" id="editor-lat" value="48.8566" step="0.0001" aria-label="Latitude">
+            </div>
+            <div class="setting-row">
+              <label>Longitude</label>
+              <input type="number" id="editor-lon" value="2.3522" step="0.0001" aria-label="Longitude">
+            </div>
+            <div class="setting-row">
+              <button class="btn-geo" onclick="useMyLocation()" type="button">
+                📍 Utiliser ma position
+              </button>
+            </div>
+            <div class="setting-row">
+              <label>Fuseau horaire</label>
+              <select id="editor-tz" aria-label="Fuseau horaire">
+                <option value="Europe/Paris" selected>Europe/Paris</option>
+                <option value="Europe/London">Europe/London</option>
+                <option value="Europe/Brussels">Europe/Brussels</option>
+                <option value="Europe/Zurich">Europe/Zurich</option>
+                <option value="Europe/Madrid">Europe/Madrid</option>
+                <option value="Europe/Rome">Europe/Rome</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label>
+                Date de référence
+                <span data-tooltip="Le solstice d'été (21 juin) donne la journée la plus longue.">?</span>
+              </label>
+              <input type="date" id="editor-date" value="2026-06-21" aria-label="Date">
+            </div>
+            <div class="setting-row">
+              <label>
+                Résolution (m)
+                <span data-tooltip="0.5 m = plus précis mais plus lent.">?</span>
+              </label>
+              <select id="editor-pas" aria-label="Résolution">
+                <option value="0.5">0.5 m</option>
+                <option value="1" selected>1 m</option>
+                <option value="2">2 m</option>
+              </select>
+            </div>
+          </div>
+          <!-- Course solaire -->
+          <div style="border-top:1px solid #f0f0e8; padding-top:0.5rem;">
+            <div class="sidebar-section-title" style="padding:0 0 0.35rem;font-size:0.68rem;">
+              <span class="section-icon">☀️</span> Course solaire
+            </div>
+            <div class="synth-row">
+              <span class="synth-row-label">Été (solstice)</span>
+              <span class="synth-row-value" id="synth-soleil-ete" style="font-size:0.72rem;max-width:160px;text-align:right;">—</span>
+            </div>
+            <div class="synth-row">
+              <span class="synth-row-label">Hiver (solstice)</span>
+              <span class="synth-row-value" id="synth-soleil-hiver" style="font-size:0.72rem;max-width:160px;text-align:right;">—</span>
+            </div>
+            <div class="synth-row">
+              <span class="synth-row-label">Diff. éclairement</span>
+              <span class="synth-row-value" id="synth-diff-eclairement">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. CTA PRINCIPAL ─────────────────────────────── -->
+      <div class="sidebar-cta">
+        <button id="btn-analyser" class="btn-analyser-cta" onclick="lancerAnalyse()">
+          ☀️ Analyser le terrain
+        </button>
+        <button id="btn-pdf" class="btn-pdf" onclick="exportPdf()">
+          📄 Exporter plan PDF
+        </button>
+      </div>
+
+      <!-- 9. MINI RÉSULTATS (affichés après analyse) -->
+      <div class="sidebar-mini-results hidden" id="sidebar-mini-results">
+        <div class="mini-expo-banner" id="mini-expo-banner">
+          <!-- Rempli par app.js -->
+        </div>
+        <button class="btn-voir-resultats" onclick="showTab('resultats')">
+          Voir les résultats détaillés →
+        </button>
+      </div>
+
+      <!-- 10. LLM status -->
+      <div class="llm-status loading" id="llm-status-msg" style="margin-top:auto;">
+        <div class="llm-status-dot"></div>
+        <span class="llm-status-text">Vérification de l'agent IA…</span>
+      </div>
+
+    </div><!-- /editor-sidebar -->
+  </div><!-- /editor-layout -->
+
+  <!-- ═══ Résultats ══════════════════════════════════════════════════ -->
+  <div id="resultats" class="results-page hidden">
+
+    <!-- Header résultats -->
+    <div class="results-page-header">
+      <div>
+        <h1 class="results-title">Résultats d'analyse</h1>
+        <p class="results-subtitle" id="results-subtitle">Analyse du terrain — <span id="results-date">—</span></p>
+      </div>
+      <div class="results-header-actions">
+        <button class="btn btn-secondary" onclick="showTab('editor')">← Retour éditeur</button>
+        <button class="btn btn-primary" id="btn-pdf-results" onclick="exportPdf()">📄 Exporter PDF</button>
+        <button class="btn btn-primary" onclick="toggleChat()">💬 Discuter</button>
+      </div>
+    </div>
+
+    <!-- État : aucune analyse -->
+    <div class="no-analysis-state" id="no-analysis-state">
+      <div class="no-analysis-icon">📊</div>
+      <div class="no-analysis-title">Aucune analyse disponible</div>
+      <div class="no-analysis-text">Configurez votre terrain dans l'éditeur puis cliquez sur "Analyser le terrain".</div>
+      <button class="btn btn-primary" onclick="showTab('editor')">Aller à l'éditeur →</button>
+    </div>
+
+    <!-- Contenu résultats (hidden until analysis) -->
+    <div class="analysis-content hidden" id="analysis-content">
+
+      <!-- Bandeau exposition -->
+      <div class="expo-banner" id="expo-banner">
+        Votre terrain : <strong id="banner-soleil">—</strong> plein soleil ·
+        <strong id="banner-miombre">—</strong> mi-ombre ·
+        <strong id="banner-ombre">—</strong> ombre
+      </div>
+
+      <!-- 3 cartes exposition -->
+      <div class="expo-cards">
+        <div class="expo-card expo-card-soleil">
+          <div class="expo-card-icon">☀️</div>
+          <div class="expo-card-title">Plein soleil</div>
+          <div class="expo-card-sub">≥ 6h / jour</div>
+          <div class="expo-card-pct" id="card-pct-soleil">—</div>
+          <div class="expo-card-surf" id="card-surf-soleil">— m²</div>
+        </div>
+        <div class="expo-card expo-card-miombre">
+          <div class="expo-card-icon">⛅</div>
+          <div class="expo-card-title">Mi-ombre</div>
+          <div class="expo-card-sub">3 à 6h / jour</div>
+          <div class="expo-card-pct" id="card-pct-miombre">—</div>
+          <div class="expo-card-surf" id="card-surf-miombre">— m²</div>
+        </div>
+        <div class="expo-card expo-card-ombre">
+          <div class="expo-card-icon">🌑</div>
+          <div class="expo-card-title">Ombre</div>
+          <div class="expo-card-sub">&lt; 3h / jour</div>
+          <div class="expo-card-pct" id="card-pct-ombre">—</div>
+          <div class="expo-card-surf" id="card-surf-ombre">— m²</div>
+        </div>
+      </div>
+
+      <!-- Visualisations -->
+      <div class="results-grid">
+        <div class="result-card">
+          <div class="result-card-title">Carte d'exposition solaire</div>
+          <div class="canvas-wrapper">
+            <canvas id="canvas-exposition" width="400" height="280"></canvas>
+          </div>
+          <div id="expo-legend" class="expo-legend"></div>
+          <div id="expo-details" class="expo-details"></div>
+        </div>
+
+        <div class="result-card">
+          <div class="result-card-title">Plan 2D du terrain</div>
+          <div class="canvas-wrapper">
+            <canvas id="canvas-plan" width="400" height="280"></canvas>
+          </div>
+          <div id="plan-legend" class="plan-legend">
+            <span class="legend-item" style="--c:#e8f0dc">Jardin</span>
+            <span class="legend-item" style="--c:#9e9e9e">Maison</span>
+            <span class="legend-item" style="--c:#d4b896">Terrasse</span>
+          </div>
+        </div>
+
+        <div class="result-card">
+          <div class="result-card-title">Surfaces calculées</div>
+          <div id="surfaces-grid" class="metrics-grid"></div>
+        </div>
+      </div>
+
+      <!-- Section plantes recommandées -->
+      <div class="result-card" id="plantes-section" style="display:none;">
+        <div class="result-card-title">🌿 Plantes recommandées</div>
+        <div id="plantes-content"></div>
+        <button class="btn btn-secondary" style="margin-top:0.75rem;"
+                onclick="challengerAvecIA()">
+          🤖 Demander à l'IA de challenger ces résultats
+        </button>
+      </div>
+
+    </div><!-- /analysis-content -->
+  </div><!-- /resultats -->
+
+  <!-- Footer -->
+  <footer style="padding:0.6rem 1.5rem;background:#fff;border-top:1px solid #e8e8e0;
+                  display:flex;align-items:center;gap:0.75rem;font-size:0.75rem;color:#aaa;">
+    <img src="/assets/logo.svg" alt="" width="18" height="18" style="opacity:0.5;">
+    <span>IA Paysagiste · pvlib · données géographiques réelles</span>
+  </footer>
+
+  <!-- ═══ Chat ════════════════════════════════════════════════════════ -->
+  <button id="chat-toggle" class="chat-bubble" aria-label="Ouvrir l'assistant">
+    <svg id="chat-icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" width="26" height="26">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    <svg id="chat-icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2.5" width="22" height="22" style="display:none">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  </button>
+
+  <div id="chat-panel" class="chat-panel hidden">
+    <div class="chat-header">
+      <div class="chat-header-info">
+        <div class="chat-avatar">
+          <img src="/assets/logo.svg" alt="" width="22" height="22">
+        </div>
+        <div>
+          <div class="chat-header-title">Assistant aménagement paysager</div>
+          <div class="chat-header-status" id="chat-status">En ligne</div>
+        </div>
+      </div>
+      <button class="chat-close" onclick="toggleChat()" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             width="18" height="18">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="chat-messages" class="chat-messages">
+      <div class="chat-welcome" id="chat-welcome">
+        <p>Bonjour ! Je suis votre assistant en aménagement paysager.</p>
+        <p>Configurez votre terrain dans l'éditeur puis posez-moi vos questions.</p>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <textarea id="chat-input" class="chat-input"
+                placeholder="Posez votre question sur le terrain…" rows="1"></textarea>
+      <button id="chat-send" class="chat-send" aria-label="Envoyer">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- Tooltip bubble -->
+  <div id="tooltip-bubble" class="tooltip-bubble"></div>
+
+  <!-- ═══ Scripts ═════════════════════════════════════════════════════ -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/js/canvas_editor.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/chat.js"></script>
+
+  <script>
+    /* ── Tab navigation ─────────────────────────────────── */
+    function showTab(tab) {
+      const editorEl    = document.getElementById('editor');
+      const resultatsEl = document.getElementById('resultats');
+      const breadcrumb  = document.getElementById('breadcrumb');
+      const linkEditor  = document.getElementById('tab-link-editor');
+      const linkResults = document.getElementById('tab-link-resultats');
+
+      if (tab === 'resultats') {
+        editorEl.style.display    = 'none';
+        resultatsEl.classList.remove('hidden');
+        breadcrumb.style.display  = 'none';
+        linkEditor.classList.remove('active');
+        linkResults.classList.add('active');
+      } else {
+        editorEl.style.display    = '';
+        resultatsEl.classList.add('hidden');
+        breadcrumb.style.display  = '';
+        linkEditor.classList.add('active');
+        linkResults.classList.remove('active');
+        // Re-fit canvas after layout restore
+        setTimeout(() => typeof fitCanvas !== 'undefined' && fitCanvas(), 10);
+      }
+    }
+    window.showTab = showTab;
+
+    document.getElementById('tab-link-editor').addEventListener('click', e => {
+      e.preventDefault(); showTab('editor');
+    });
+    document.getElementById('tab-link-resultats').addEventListener('click', e => {
+      e.preventDefault(); showTab('resultats');
+    });
+
+    /* ── Accordion helper ───────────────────────────────── */
+    function toggleAccordion(id) {
+      const body    = document.getElementById(id);
+      const trigger = document.getElementById(id + '-trigger');
+      if (!body) return;
+      const open = body.classList.toggle('open');
+      if (trigger) trigger.classList.toggle('open', open);
+    }
+
+    /* ── Slope helpers (override canvas_editor if loaded after) ── */
+    function toggleSlope() {
+      const s = document.getElementById('slope-section');
+      if (s) s.style.display = s.style.display === 'none' ? '' : 'none';
+    }
+    function onSlopeToggle(enabled) {
+      document.getElementById('slope-fields').style.display = enabled ? '' : 'none';
+      typeof afterChange !== 'undefined' && afterChange();
+    }
+    function setSlopeVal(v) {
+      document.getElementById('slope-pct').textContent = v + '%';
+      typeof afterChange !== 'undefined' && afterChange();
+    }
+
+    /* ── Reset editor ───────────────────────────────────── */
+    function resetEditor() {
+      if (!confirm('Réinitialiser l\'éditeur ? Toutes les modifications seront perdues.')) return;
+      location.reload();
+    }
+
+    /* ── Challenge IA ───────────────────────────────────── */
+    function challengerAvecIA() {
+      const banner = document.getElementById('expo-banner')?.textContent || '';
+      const prompt = `Analyse et challenge ces résultats d'exposition : ${banner}. Quelles plantes recommandes-tu pour ce terrain ?`;
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput) chatInput.value = prompt;
+      typeof toggleChat !== 'undefined' && toggleChat();
+      showTab('editor');
+    }
+
+    /* ── Toast system ───────────────────────────────────── */
+    function showToast(msg, type = 'info', duration = 3500) {
+      const icons = { success: '✓', error: '✕', info: 'ℹ', warning: '⚠' };
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span>
+                      <span class="toast-msg">${msg}</span>`;
+      container.appendChild(el);
+      setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; }, duration);
+      setTimeout(() => el.remove(), duration + 350);
+    }
+    window.showToast = showToast;
+
+    /* ── Tooltip system ─────────────────────────────────── */
+    (function initTooltips() {
+      const bubble = document.getElementById('tooltip-bubble');
+      let active = null;
+      document.addEventListener('mouseover', e => {
+        const tr = e.target.closest('[data-tooltip]');
+        if (!tr || tr === active) return;
+        active = tr;
+        bubble.textContent = tr.dataset.tooltip;
+        bubble.classList.add('visible');
+      });
+      document.addEventListener('mousemove', e => {
+        if (!active) return;
+        bubble.style.left = (e.clientX + 12) + 'px';
+        bubble.style.top  = (e.clientY - 8) + 'px';
+      });
+      document.addEventListener('mouseout', e => {
+        if (active && !active.contains(e.relatedTarget)) {
+          active = null;
+          bubble.classList.remove('visible');
+        }
+      });
+    })();
+
+    /* ── Hedge empty-msg ────────────────────────────────── */
+    (function watchHedgeList() {
+      const list = document.getElementById('hedge-list');
+      const msg  = document.getElementById('hedge-empty-msg');
+      if (!list || !msg) return;
+      new MutationObserver(() => {
+        const has = list.querySelectorAll('.hedge-control-item').length > 0;
+        msg.style.display = has ? 'none' : '';
+      }).observe(list, { childList: true });
+    })();
+
+    /* ── Props section auto-show ────────────────────────── */
+    (function watchPropsPanel() {
+      const panel   = document.getElementById('props-panel');
+      const section = document.getElementById('props-section');
+      if (!panel || !section) return;
+      new MutationObserver(() => {
+        section.style.display = panel.classList.contains('hidden') ? 'none' : '';
+      }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+    })();
+  </script>
+
+</body>
+</html>

@@ -11,6 +11,7 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import reverse_geocoder as rg
 from pvlib.solarposition import get_solarposition
+from shapely.geometry import box as shapely_box
 
 from core.geometry import rect_to_poly, poly_area, circle_area
 from core.schemas import (
@@ -23,6 +24,7 @@ from core.schemas import (
     PlantationPlanOutput,
     PlantPlacement,
 )
+from core.shadow_engine import sun_hours_grid, terrain_to_obstacles
 
 
 # -------------------------------------------------------------------
@@ -230,10 +232,12 @@ def compute_surfaces(terrain: TerrainInput) -> Dict[str, float]:
         poly_m = rect_to_poly(*m.origine, m.largeur, m.hauteur)
         surface_maison += poly_area(poly_m)
 
-    poly_terrasse = rect_to_poly(
-        *terrain.terrasse.origine, terrain.terrasse.largeur, terrain.terrasse.hauteur
-    )
-    surface_terrasse = poly_area(poly_terrasse)
+    surface_terrasse = 0.0
+    if terrain.terrasse is not None:
+        poly_terrasse = rect_to_poly(
+            *terrain.terrasse.origine, terrain.terrasse.largeur, terrain.terrasse.hauteur
+        )
+        surface_terrasse = poly_area(poly_terrasse)
 
     surface_trous = 0.0
     for t in terrain.trous_terrasse:
@@ -286,16 +290,17 @@ def build_plan_2d(terrain: TerrainInput) -> List[Shape2D]:
             )
         )
 
-    shapes.append(
-        Shape2D(
-            type="rectangle",
-            label="Terrasse",
-            x=float(terrain.terrasse.origine[0]),
-            y=float(terrain.terrasse.origine[1]),
-            w=float(terrain.terrasse.largeur),
-            h=float(terrain.terrasse.hauteur),
+    if terrain.terrasse is not None:
+        shapes.append(
+            Shape2D(
+                type="rectangle",
+                label="Terrasse",
+                x=float(terrain.terrasse.origine[0]),
+                y=float(terrain.terrasse.origine[1]),
+                w=float(terrain.terrasse.largeur),
+                h=float(terrain.terrasse.hauteur),
+            )
         )
-    )
 
     for i, t in enumerate(terrain.trous_terrasse, start=1):
         if t.forme == "rectangle" and t.dimensions:
@@ -568,71 +573,74 @@ def _is_in_shadow_by_any_obstacle(
 
 
 def compute_exposition(terrain: TerrainInput) -> Dict:
-    sun_cases = _build_sun_cases(terrain.latitude)
-
+    """Calcule l'exposition solaire simplifiée via le moteur shadow_engine."""
     pas = float(terrain.pas_grille_m)
     W = float(terrain.parcelle.largeur)
     H = float(terrain.parcelle.hauteur)
 
+    parcel_geom = shapely_box(0, 0, W, H)
+    obstacles = terrain_to_obstacles(terrain)
+    grid, meta = sun_hours_grid(
+        parcel=parcel_geom,
+        obstacles=obstacles,
+        date=terrain.date_ref,
+        lat=float(terrain.latitude),
+        lon=float(terrain.longitude),
+        parcel_rotation=float(terrain.orientation_nord_deg),
+        resolution_m=pas,
+        time_step_min=int(terrain.pas_minutes),
+        tz=terrain.timezone,
+        slope_pct=float(terrain.slope_pct),
+        slope_orientation_deg=float(terrain.slope_orientation_deg),
+        start_hour=int(terrain.heure_debut),
+        end_hour=int(terrain.heure_fin),
+    )
+
     cells = []
     counts = {"ombre": 0, "mi_ombre": 0, "plein_soleil": 0}
+    max_minutes = int(round(meta.get("max_hours", 0) * 60))
 
-    nx = int(math.ceil(W / pas))
-    ny = int(math.ceil(H / pas))
-
+    ny, nx = grid.shape
     for iy in range(ny):
         for ix in range(nx):
             x = (ix + 0.5) * pas
             y = (iy + 0.5) * pas
-
-            # Filtre zone_analyse
             if not _cell_in_zone(x, y, terrain):
                 continue
 
-            score = 0
-            for sc in sun_cases:
-                if not _is_in_shadow_by_any_obstacle((x, y), terrain, sc.altitude_deg, sc.azimuth_deg):
-                    score += 1
-
-            if score <= 2:
+            hours = float(grid[iy, ix])
+            minutes_soleil = int(round(hours * 60.0))
+            ratio = 0.0 if max_minutes == 0 else minutes_soleil / max_minutes
+            if ratio <= 0.25:
                 classe = "ombre"
-            elif score <= 6:
+            elif ratio <= 0.60:
                 classe = "mi_ombre"
             else:
                 classe = "plein_soleil"
 
             counts[classe] += 1
-            cells.append({"x": round(x, 3), "y": round(y, 3), "score": score, "classe": classe})
+            cells.append({
+                "x": round(x, 3),
+                "y": round(y, 3),
+                "score": minutes_soleil,
+                "classe": classe,
+            })
 
     total = len(cells)
-    if total == 0:
-        resume = {
-            "total_cells": 0,
-            "pct_ombre": 0.0,
-            "pct_mi_ombre": 0.0,
-            "pct_plein_soleil": 0.0,
-            "sun_cases": [
-                {"name": s.name, "altitude_deg": round(s.altitude_deg, 1), "azimuth_deg": s.azimuth_deg}
-                for s in sun_cases
-            ],
-            "zone_analyse": terrain.zone_analyse,
-            "cells_zone": 0,
-            "warning": "Zone vide : aucune cellule dans la zone_analyse.",
-        }
-        return {"pas_grille_m": pas, "largeur": W, "hauteur": H, "cells": cells, "resume": resume}
-
     resume = {
-        "total_cells": total,
-        "pct_ombre": round(100 * counts["ombre"] / total, 1),
-        "pct_mi_ombre": round(100 * counts["mi_ombre"] / total, 1),
-        "pct_plein_soleil": round(100 * counts["plein_soleil"] / total, 1),
-        "sun_cases": [
-            {"name": s.name, "altitude_deg": round(s.altitude_deg, 1), "azimuth_deg": s.azimuth_deg}
-            for s in sun_cases
-        ],
+        "date_ref": terrain.date_ref,
+        "timezone": terrain.timezone,
+        "pas_minutes": int(terrain.pas_minutes),
+        "max_minutes_theorique": max_minutes,
+        "pct_ombre": round(100 * counts["ombre"] / total, 1) if total else 0.0,
+        "pct_mi_ombre": round(100 * counts["mi_ombre"] / total, 1) if total else 0.0,
+        "pct_plein_soleil": round(100 * counts["plein_soleil"] / total, 1) if total else 0.0,
         "zone_analyse": terrain.zone_analyse,
         "cells_zone": total,
     }
+
+    if total == 0:
+        resume["warning"] = "Zone vide : aucune cellule dans la zone_analyse."
 
     return {"pas_grille_m": pas, "largeur": W, "hauteur": H, "cells": cells, "resume": resume}
 
@@ -651,23 +659,50 @@ def load_plantes() -> List[Plante]:
 
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
+        if reader.fieldnames:
+            normalized_names = [name.strip().lower().lstrip("\ufeff") for name in reader.fieldnames]
+            reader.fieldnames = normalized_names
+
         for row in reader:
+            normalized_row = {
+                key.strip().lower().lstrip("\ufeff"): value
+                for key, value in row.items()
+            }
+
+            def _f(k, default=0.0):
+                v = normalized_row.get(k, "").strip()
+                try: return float(v) if v else default
+                except (ValueError, TypeError): return default
+
+            def _s(k): return normalized_row.get(k, "").strip() or None
+
             plantes.append(
                 Plante(
-                    nom=row["nom"],
-                    type=row["type"],
-                    exposition=row["exposition"],
-                    sol=row["sol"],
-                    climat=row["climat"],
-                    hauteur_m=float(row["hauteur_m"]),
-                    largeur_m=float(row["largeur_m"]),
-                    distance_m=float(row["distance_m"]),
-                    floraison=row["floraison"],
-                    feuillage=row["feuillage"],
-                    couleur=row["couleur"],
-                    notes=row.get("notes", ""),
-                    photo_url=row.get("photo_url") or None,
-                    exigences=row.get("exigences") or None,
+                    nom=normalized_row.get("nom", ""),
+                    type=normalized_row.get("type", ""),
+                    exposition=normalized_row.get("exposition", ""),
+                    sol=normalized_row.get("sol", ""),
+                    climat=normalized_row.get("climat", ""),
+                    hauteur_m=_f("hauteur_m"),
+                    largeur_m=_f("largeur_m"),
+                    distance_m=_f("distance_m"),
+                    floraison=normalized_row.get("floraison", ""),
+                    feuillage=normalized_row.get("feuillage", ""),
+                    couleur=normalized_row.get("couleur", ""),
+                    notes=normalized_row.get("notes", ""),
+                    photo_url=_s("photo_url"),
+                    exigences=_s("exigences"),
+                    exposition_min_h=_f("exposition_min_h", None) if normalized_row.get("exposition_min_h") else None,
+                    exposition_max_h=_f("exposition_max_h", None) if normalized_row.get("exposition_max_h") else None,
+                    sol_prefere=_s("sol_prefere"),
+                    ph_min=_f("ph_min", None) if normalized_row.get("ph_min") else None,
+                    ph_max=_f("ph_max", None) if normalized_row.get("ph_max") else None,
+                    periode_floraison=_s("periode_floraison"),
+                    couleur_fleur=_s("couleur_fleur"),
+                    persistant=(normalized_row.get("persistant", "").strip().lower() in ("oui","true","1","yes")) if normalized_row.get("persistant") else None,
+                    rusticite_min_c=_f("rusticite_min_c", None) if normalized_row.get("rusticite_min_c") else None,
+                    entretien=_s("entretien"),
+                    prix_indicatif_eur=_f("prix_indicatif_eur", None) if normalized_row.get("prix_indicatif_eur") else None,
                 )
             )
     return plantes
@@ -707,66 +742,50 @@ def reverse_city(latitude: float, longitude: float) -> dict:
 # Exposition précise (pvlib) - multi-blocs maison/extension
 # -------------------------------------------------------------------
 def compute_exposition_precise(terrain: TerrainInput) -> Dict:
+    """Calcule une exposition solaire précise via le moteur shadow_engine."""
     pas_grille = float(terrain.pas_grille_m)
     W = float(terrain.parcelle.largeur)
     H = float(terrain.parcelle.hauteur)
-
-    date = terrain.date_ref
     tz = terrain.timezone
     pas_min = int(terrain.pas_minutes)
 
     if terrain.heure_fin < terrain.heure_debut:
         raise ValueError("heure_fin doit etre >= heure_debut")
 
-    start = pd.Timestamp(f"{date} {terrain.heure_debut:02d}:00:00", tz=tz)
-    end = pd.Timestamp(f"{date} {terrain.heure_fin:02d}:00:00", tz=tz)
-    times = pd.date_range(start=start, end=end, freq=f"{pas_min}min", inclusive="left")
+    parcel_geom = shapely_box(0, 0, W, H)
+    obstacles = terrain_to_obstacles(terrain)
 
-    solpos = get_solarposition(
-        times,
-        latitude=float(terrain.latitude),
-        longitude=float(terrain.longitude),
+    grid, meta = sun_hours_grid(
+        parcel=parcel_geom,
+        obstacles=obstacles,
+        date=terrain.date_ref,
+        lat=float(terrain.latitude),
+        lon=float(terrain.longitude),
+        parcel_rotation=float(terrain.orientation_nord_deg),
+        resolution_m=pas_grille,
+        time_step_min=pas_min,
+        tz=tz,
+        slope_pct=float(terrain.slope_pct),
+        slope_orientation_deg=float(terrain.slope_orientation_deg),
+        start_hour=int(terrain.heure_debut),
+        end_hour=int(terrain.heure_fin),
     )
-
-    altitudes = solpos["apparent_elevation"].to_numpy()
-    azimuths = solpos["azimuth"].to_numpy()
-
-    nx = int(math.ceil(W / pas_grille))
-    ny = int(math.ceil(H / pas_grille))
 
     cells = []
     counts = {"ombre": 0, "mi_ombre": 0, "plein_soleil": 0}
+    max_minutes = int(round(meta.get("max_hours", 0) * 60))
 
-    valid_sun = [
-        (float(alt), float(az))
-        for alt, az in zip(altitudes, azimuths)
-        if float(alt) > 0.0
-    ]
-
-    max_steps = len(valid_sun)
-    max_minutes = max_steps * pas_min
-
-    # -------------------------------------------------
-    # Boucle grille
-    # -------------------------------------------------
+    ny, nx = grid.shape
     for iy in range(ny):
         for ix in range(nx):
             x = (ix + 0.5) * pas_grille
             y = (iy + 0.5) * pas_grille
-
-            # Filtre zone
             if not _cell_in_zone(x, y, terrain):
                 continue
 
-            sunny_steps = 0
-            for alt, az in valid_sun:
-                if not _is_in_shadow_by_any_obstacle((x, y), terrain, alt, az):
-                    sunny_steps += 1
-
-            minutes_soleil = sunny_steps * pas_min
-
+            hours = float(grid[iy, ix])
+            minutes_soleil = int(round(hours * 60.0))
             ratio = 0.0 if max_minutes == 0 else minutes_soleil / max_minutes
-
             if ratio <= 0.25:
                 classe = "ombre"
             elif ratio <= 0.60:
@@ -775,61 +794,32 @@ def compute_exposition_precise(terrain: TerrainInput) -> Dict:
                 classe = "plein_soleil"
 
             counts[classe] += 1
-
             cells.append({
                 "x": round(x, 3),
                 "y": round(y, 3),
-                "score": int(minutes_soleil),
-                "classe": classe
+                "score": minutes_soleil,
+                "classe": classe,
             })
 
-    # -------------------------------------------------
-    # Gestion zone vide
-    # -------------------------------------------------
     total = len(cells)
-
     loc = reverse_city(float(terrain.latitude), float(terrain.longitude))
 
-    if total == 0:
-        resume = {
-            "date_ref": terrain.date_ref,
-            "timezone": terrain.timezone,
-            "pas_minutes": pas_min,
-            "plage": f"{terrain.heure_debut:02d}:00-{terrain.heure_fin:02d}:00",
-            "max_minutes_theorique": int(max_minutes),
-            "pct_ombre": 0.0,
-            "pct_mi_ombre": 0.0,
-            "pct_plein_soleil": 0.0,
-            "zone_analyse": terrain.zone_analyse,
-            "cells_zone": 0,
-            "location": loc,
-            "warning": "Zone vide : aucune cellule dans la zone_analyse."
-        }
-
-        return {
-            "pas_grille_m": pas_grille,
-            "largeur": W,
-            "hauteur": H,
-            "cells": [],
-            "resume": resume,
-        }
-
-    # -------------------------------------------------
-    # Resume normal
-    # -------------------------------------------------
     resume = {
         "date_ref": terrain.date_ref,
         "timezone": terrain.timezone,
         "pas_minutes": pas_min,
         "plage": f"{terrain.heure_debut:02d}:00-{terrain.heure_fin:02d}:00",
-        "max_minutes_theorique": int(max_minutes),
-        "pct_ombre": round(100 * counts["ombre"] / total, 1),
-        "pct_mi_ombre": round(100 * counts["mi_ombre"] / total, 1),
-        "pct_plein_soleil": round(100 * counts["plein_soleil"] / total, 1),
+        "max_minutes_theorique": max_minutes,
+        "pct_ombre": round(100 * counts["ombre"] / total, 1) if total else 0.0,
+        "pct_mi_ombre": round(100 * counts["mi_ombre"] / total, 1) if total else 0.0,
+        "pct_plein_soleil": round(100 * counts["plein_soleil"] / total, 1) if total else 0.0,
         "zone_analyse": terrain.zone_analyse,
         "cells_zone": total,
         "location": loc,
     }
+
+    if total == 0:
+        resume["warning"] = "Zone vide : aucune cellule dans la zone_analyse."
 
     return {
         "pas_grille_m": pas_grille,

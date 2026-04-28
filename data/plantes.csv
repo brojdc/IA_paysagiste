@@ -1,31 +1,70 @@
-﻿nom,type,exposition,sol,climat,hauteur_m,largeur_m,distance_m,floraison,feuillage,couleur,notes,photo_url,exigences
-Lavande (Lavandula),arbuste,plein_soleil,drainant,mediterraneen,0.6,0.8,0.6,06-08,persistant,violet,Tres mellifere; supporte la secheresse,https://example.com/lavande.jpg,"Hydrométrie faible, terre pauvre"
-Romarin (Salvia rosmarinus),arbuste,plein_soleil,drainant,mediterraneen,1.0,1.0,0.8,02-05,persistant,bleu,Cuisine; tres rustique en sol draine,https://example.com/romarin.jpg,"Entretien très simple"
-Thym (Thymus vulgaris),couvre_sol,plein_soleil,drainant,mediterraneen,0.2,0.4,0.3,05-07,persistant,rose,Parfait bordure; aromatique,,
-Gaura (Oenothera lindheimeri),vivace,plein_soleil,drainant,oceanique,0.9,0.5,0.5,06-10,caduc,blanc-rose,Floraison longue; leger,,
-Sauge officinale (Salvia officinalis),vivace,plein_soleil,drainant,oceanique,0.6,0.6,0.5,05-07,persistant,violet,Aromatique; supporte bien la chaleur,,
-Santoline (Santolina),arbuste,plein_soleil,drainant,mediterraneen,0.6,0.6,0.5,06-08,persistant,jaune,Feuillage gris; tres sec,,
-Ciste (Cistus),arbuste,plein_soleil,drainant,mediterraneen,1.2,1.2,1.0,05-07,persistant,rose-blanc,Sol pauvre; plein soleil,,
-Agapanthe (Agapanthus),vivace,plein_soleil,normal,oceanique,0.9,0.6,0.6,06-08,caduc,bleu,Eviter sols trop humides l hiver,,
-Sedum (Hylotelephium),vivace,plein_soleil,drainant,continental,0.5,0.5,0.4,08-10,caduc,rose,Resistant; attire pollinisateurs,,
-Echinacea,vivace,plein_soleil,normal,continental,0.9,0.5,0.5,07-09,caduc,rose,Tres robuste; fleurs estivales,,
-Achillee (Achillea),vivace,plein_soleil,drainant,continental,0.6,0.5,0.4,06-09,caduc,jaune-blanc,Supporte secheresse,,
-Perovskia (Salvia yangii),arbuste,plein_soleil,drainant,continental,1.0,0.8,0.7,07-10,caduc,bleu,Excellent en plein soleil sec,,
-Hortensia (Hydrangea),arbuste,mi_ombre,humide,oceanique,1.5,1.5,1.2,06-09,caduc,rose-bleu,Sol frais; eviter soleil brulant,,
-Hosta,vivace,ombre,humide,oceanique,0.5,0.8,0.6,06-08,caduc,blanc-lavande,Feuillage decoratif; limaces,,
-Fougere (Dryopteris),vivace,ombre,humide,oceanique,0.8,0.8,0.7,00-00,caduc,vert,Sous-bois; tres tolerante,,
-Heuchere,vivace,mi_ombre,normal,oceanique,0.4,0.5,0.4,05-07,persistant,blanc,Feuillage colore,,
-Skimmia,arbuste,ombre,normal,oceanique,0.9,0.9,0.8,03-05,persistant,blanc,Acide a neutre; baies decoratives,,
-Camelia,arbuste,mi_ombre,normal,oceanique,2.0,1.5,1.2,02-04,persistant,rose,Sol acide; eviter calcaire,,
-Buis (Buxus),arbuste,mi_ombre,normal,oceanique,1.0,1.0,0.6,00-00,persistant,vert,Taille; sensible pyrale,,
-Photinia,arbuste,mi_ombre,normal,oceanique,2.5,2.0,1.5,04-06,persistant,blanc,Jeunes pousses rouges,,
-Graminee (Stipa tenuissima),vivace,plein_soleil,drainant,continental,0.6,0.6,0.5,06-08,caduc,vert,Effet leger; peu d eau,,
-Miscanthus,graminee,plein_soleil,normal,continental,1.6,1.0,0.9,08-10,caduc,beige,Grand volume; ecran,,
-Lierre (Hedera),grimpante,ombre,normal,oceanique,5.0,2.0,0.8,09-10,persistant,vert,Couvre-sol ou grimpant; tres robuste,,
-Clematite,grimpante,mi_ombre,normal,oceanique,3.0,1.0,1.0,05-09,caduc,violet,Pied a l ombre; tete au soleil,,
-Rosier paysager,arbuste,plein_soleil,normal,continental,1.0,1.0,0.8,05-10,caduc,rose,Floraison longue; entretien,,
-Buddleia,arbuste,plein_soleil,normal,continental,2.5,2.0,1.5,07-09,caduc,violet,Attire papillons; vigoureux,,
-Cornouiller (Cornus),arbuste,mi_ombre,humide,continental,2.0,2.0,1.5,04-06,caduc,blanc,Rameaux decoratifs en hiver,,
-Aucuba,arbuste,ombre,normal,oceanique,1.5,1.5,1.2,04-05,persistant,vert,Tres tolerante a l ombre,,
-Fusain (Euonymus),arbuste,mi_ombre,normal,oceanique,1.5,1.5,1.0,05-06,persistant,vert,Haie/masse; facile,,
-Laurier-tin (Viburnum tinus),arbuste,mi_ombre,normal,mediterraneen,2.0,1.5,1.2,11-03,persistant,blanc,Floraison hivernale,,
+nom,type,exposition,sol,climat,hauteur_m,largeur_m,distance_m,floraison,feuillage,couleur,notes,photo_url,exigences,exposition_min_h,exposition_max_h,sol_prefere,ph_min,ph_max,periode_floraison,couleur_fleur,persistant,rusticite_min_c,entretien,prix_indicatif_eur
+Lavande (Lavandula angustifolia),arbuste,plein_soleil,sableux,mediterraneen,0.6,0.8,0.6,06-08,persistant,violet,Très mellifère; supporte la sécheresse,,Hydrométrie faible; terre pauvre,6,12,sableux,6.0,8.0,juin-août,violet,oui,-20,faible,5.50
+Romarin (Salvia rosmarinus),arbuste,plein_soleil,sableux,mediterraneen,1.0,1.0,0.8,02-05,persistant,bleu,Cuisine; très rustique en sol drainé,,Entretien très simple,6,12,sableux,6.0,8.5,février-mai,bleu-mauve,oui,-15,faible,6.00
+Thym (Thymus vulgaris),couvre_sol,plein_soleil,sableux,mediterraneen,0.2,0.4,0.3,05-07,persistant,rose,Parfait en bordure; aromatique,,,6,12,sableux,6.0,8.0,mai-juillet,rose-lilas,oui,-20,faible,3.50
+Gaura (Oenothera lindheimeri),vivace,plein_soleil,sableux,oceanique,0.9,0.5,0.5,06-10,caduc,blanc-rose,Floraison longue; port léger,,,6,12,limono-sableux,6.0,7.5,juin-octobre,blanc-rose,non,-15,faible,5.00
+Sauge officinale (Salvia officinalis),vivace,plein_soleil,sableux,oceanique,0.6,0.6,0.5,05-07,persistant,violet,Aromatique; supporte bien la chaleur,,,6,12,sableux,6.0,8.0,mai-juillet,violet-bleu,oui,-20,faible,4.50
+Santoline (Santolina chamaecyparissus),arbuste,plein_soleil,sableux,mediterraneen,0.6,0.6,0.5,06-08,persistant,jaune,Feuillage argenté; très sec,,,6,12,sableux,6.5,8.5,juin-août,jaune,oui,-15,faible,5.00
+Ciste (Cistus purpureus),arbuste,plein_soleil,sableux,mediterraneen,1.2,1.2,1.0,05-07,persistant,rose,Sol pauvre; plein soleil; courte vie,,,6,12,sableux,5.5,7.5,mai-juillet,rose,oui,-10,faible,7.00
+Agapanthe (Agapanthus africanus),vivace,plein_soleil,limoneux,oceanique,0.9,0.6,0.6,06-08,caduc,bleu,Éviter sols trop humides l'hiver,,,6,12,limoneux,6.0,7.5,juin-août,bleu-blanc,non,-8,moyen,8.00
+Sedum (Hylotelephium spectabile),vivace,plein_soleil,sableux,continental,0.5,0.5,0.4,08-10,caduc,rose,Résistant; attire pollinisateurs,,,6,12,limono-sableux,6.0,8.0,août-octobre,rose,non,-25,faible,4.50
+Echinacea purpurea,vivace,plein_soleil,limoneux,continental,0.9,0.5,0.5,07-09,caduc,rose,Très robuste; fleurs estivales; médicinal,,,6,12,limoneux,6.0,7.5,juillet-septembre,rose-pourpre,non,-30,faible,5.50
+Achillée (Achillea millefolium),vivace,plein_soleil,sableux,continental,0.6,0.5,0.4,06-09,caduc,jaune-blanc,Supporte sécheresse; couvre-sol,,,6,12,limono-sableux,5.5,7.5,juin-septembre,jaune-blanc,non,-30,faible,3.50
+Pérovskia (Salvia yangii),arbuste,plein_soleil,sableux,continental,1.0,0.8,0.7,07-10,caduc,bleu,Excellent en plein soleil sec,,,6,12,sableux,6.0,8.0,juillet-octobre,bleu-lavande,non,-25,faible,6.50
+Rudbeckia fulgida,vivace,plein_soleil,limoneux,continental,0.7,0.6,0.5,07-10,caduc,jaune,Floraison automnale vive; rustique,,,6,12,limoneux,5.5,7.0,juillet-octobre,jaune-or,non,-30,faible,5.00
+Miscanthus sinensis,graminee,plein_soleil,limoneux,continental,1.8,1.2,1.0,08-10,caduc,beige,Grand volume; écran; plumes automnales,,,6,12,limoneux,5.5,7.5,août-octobre,beige-argenté,non,-25,faible,9.00
+Stipa tenuissima,graminee,plein_soleil,sableux,continental,0.6,0.6,0.5,06-08,caduc,vert,Effet léger; peu d'eau,,,6,12,sableux,6.0,8.0,juin-août,vert-beige,non,-20,faible,6.00
+Molinia caerulea,graminee,plein_soleil,limoneux,oceanique,0.9,0.6,0.6,07-09,caduc,beige,Graminée elegante; sol frais toléré,,,5,12,limono-argileux,5.0,7.0,juillet-septembre,beige,non,-25,faible,7.00
+Pennisetum alopecuroides,graminee,plein_soleil,limoneux,continental,0.9,0.8,0.7,08-10,caduc,bordeaux,Épis soyeux automnaux; decoratif,,,6,12,limoneux,6.0,7.5,août-octobre,bordeaux-beige,non,-20,faible,8.00
+Hemerocallis (Hémérocalle),vivace,plein_soleil,limoneux,continental,0.7,0.6,0.5,06-08,caduc,orange-jaune,Rustique; floraison successive; facile,,,5,12,limoneux,6.0,7.5,juin-août,orange-jaune-rouge,non,-30,faible,6.00
+Géranium vivace (Geranium x),vivace,mi_ombre,limoneux,oceanique,0.4,0.5,0.4,05-09,caduc,violet,Couvre-sol; très adaptable; longue floraison,,,3,6,limono-argileux,5.5,7.5,mai-septembre,violet-rose,non,-25,faible,5.00
+Alchémille (Alchemilla mollis),vivace,mi_ombre,limoneux,oceanique,0.4,0.5,0.4,05-07,caduc,vert-jaune,Feuillage decoratif; retient la rosée,,,3,6,limoneux,5.5,7.5,mai-juillet,vert-jaune,non,-25,faible,4.50
+Astilbe,vivace,mi_ombre,limoneux,oceanique,0.7,0.5,0.4,06-08,caduc,rose-rouge,Sol humide; belle floraison estivale,,,2,6,limono-argileux,5.5,7.0,juin-août,rose-rouge-blanc,non,-30,faible,7.00
+Ligulaire (Ligularia),vivace,mi_ombre,limoneux,oceanique,1.0,0.8,0.7,07-09,caduc,jaune-orange,Sol frais-humide; grandes feuilles,,,2,5,limono-argileux,5.5,7.0,juillet-septembre,jaune-orange,non,-25,faible,8.00
+Hostas (Hosta),vivace,ombre,limoneux,oceanique,0.5,0.8,0.6,06-08,caduc,blanc-lavande,Feuillage décoratif; limaces à surveiller,,,0,3,limoneux,5.5,7.5,juin-août,blanc-lavande,non,-30,moyen,8.00
+Fougère (Dryopteris filix-mas),vivace,ombre,limoneux,oceanique,0.8,0.8,0.7,00-00,caduc,vert,Sous-bois; très tolérant à l'ombre,,,0,3,limoneux,5.0,7.0,,vert (pas de fleur),non,-25,faible,6.00
+Heuchère (Heuchera),vivace,mi_ombre,limoneux,oceanique,0.4,0.5,0.4,05-07,persistant,blanc,Feuillage coloré; variétés nombreuses,,,2,6,limoneux,6.0,7.5,mai-juillet,blanc-crème,oui,-25,faible,7.50
+Skimmia japonica,arbuste,ombre,limoneux,oceanique,0.9,0.9,0.8,03-05,persistant,blanc,Acide à neutre; baies décoratives rouges,,,0,3,limono-argileux,5.0,6.5,mars-mai,blanc,oui,-15,faible,12.00
+Camélia (Camellia japonica),arbuste,mi_ombre,limoneux,oceanique,2.0,1.5,1.2,02-04,persistant,rose,Sol acide; éviter calcaire; gel protéger,,,2,6,limoneux,4.5,6.5,février-avril,rose-rouge-blanc,oui,-10,moyen,18.00
+Buis (Buxus sempervirens),arbuste,mi_ombre,limoneux,oceanique,1.5,1.5,0.8,00-00,persistant,vert,Taille topiaire; sensible pyrale,,,2,6,limoneux,6.0,7.5,,vert (pas de fleur),oui,-20,élevé,9.00
+Photinia x fraseri,arbuste,mi_ombre,limoneux,oceanique,2.5,2.0,1.5,04-06,persistant,blanc,Jeunes pousses rouges; haie; robuste,,,3,6,limoneux,6.0,7.5,avril-juin,blanc,oui,-15,moyen,11.00
+Hortensia (Hydrangea macrophylla),arbuste,mi_ombre,limoneux,oceanique,1.5,1.5,1.2,06-09,caduc,rose-bleu,Sol frais; éviter soleil brûlant; taille légère,,,2,6,limoneux,5.0,7.0,juin-septembre,rose-bleu (selon pH),non,-15,moyen,12.00
+Hortensia 'Annabelle' (H. arborescens),arbuste,mi_ombre,limoneux,oceanique,1.5,2.0,1.5,06-09,caduc,blanc,Grosses boules blanches; rustique,,,2,6,limoneux,5.5,7.0,juin-septembre,blanc,non,-25,moyen,14.00
+Cornus (Cornouiller),arbuste,mi_ombre,limoneux,continental,2.5,2.5,2.0,04-06,caduc,blanc,Rameaux colorés en hiver; baies; rustique,,,2,6,limoneux,5.5,7.5,avril-juin,blanc,non,-30,faible,12.00
+Aucuba japonica,arbuste,ombre,limoneux,oceanique,1.5,1.5,1.2,04-05,persistant,vert,Très tolérant à l'ombre profonde; baies,,,0,3,limoneux,5.5,7.5,avril-mai,rouge (baies),oui,-15,faible,10.00
+Fusain (Euonymus fortunei),arbuste,mi_ombre,limoneux,oceanique,1.5,1.5,1.0,05-06,persistant,vert-panaché,Haie/masse; couvre-sol; adaptatble,,,2,6,limoneux,6.0,7.5,mai-juin,vert (baies oranges),oui,-20,faible,8.00
+Viorne (Viburnum tinus),arbuste,mi_ombre,limoneux,mediterraneen,2.0,1.5,1.2,11-03,persistant,blanc,Floraison hivernale; baies bleues,,,3,6,limoneux,6.0,8.0,novembre-mars,blanc-rose,oui,-10,faible,13.00
+Pittosporum tobira,arbuste,plein_soleil,sableux,mediterraneen,2.0,1.5,1.2,04-06,persistant,blanc,Parfum jasmin; résistant côtes; haie bord mer,,,6,12,sableux,6.0,8.0,avril-juin,blanc-crème,oui,-8,faible,14.00
+Lierre (Hedera helix),grimpante,ombre,limoneux,oceanique,5.0,2.0,0.8,09-10,persistant,vert,Couvre-sol ou grimpant; très robuste; baies,,,0,3,limoneux,5.0,8.0,septembre-octobre,vert (baies noires),oui,-20,faible,4.00
+Clématite (Clematis x),grimpante,mi_ombre,limoneux,oceanique,3.0,1.0,1.0,05-09,caduc,violet,Pied à l'ombre; tête au soleil; taille selon groupe,,,3,6,limoneux,6.0,7.5,mai-septembre,violet-rose-blanc,non,-25,moyen,13.00
+Rosier arbustif,arbuste,plein_soleil,limoneux,continental,1.2,1.2,1.0,05-10,caduc,rose,Floraison longue; entretien taille et traitements,,,6,12,limoneux,6.0,7.5,mai-octobre,rose-rouge-blanc,non,-20,élevé,15.00
+Buddleia (Buddleja davidii),arbuste,plein_soleil,limoneux,continental,2.5,2.0,1.5,07-09,caduc,violet,Attire papillons; vigoureux; taille mars,,,6,12,limoneux,6.0,8.0,juillet-septembre,violet-blanc-rose,non,-20,faible,9.00
+Coreopsis (Coreopsis grandiflora),vivace,plein_soleil,sableux,continental,0.5,0.5,0.4,06-09,caduc,jaune,Longue floraison; sec supporté; lumineux,,,6,12,sableux,6.0,7.5,juin-septembre,jaune,non,-25,faible,4.50
+Knautie (Knautia macedonica),vivace,plein_soleil,limoneux,continental,0.7,0.5,0.5,06-10,caduc,pourpre,Très mellifère; longue floraison; naturel,,,6,12,limono-sableux,6.5,8.0,juin-octobre,pourpre-bordeaux,non,-25,faible,5.00
+Fenouil bronze (Foeniculum vulgare 'Purpureum'),vivace,plein_soleil,sableux,mediterraneen,1.5,0.6,0.6,07-09,caduc,jaune,Feuillage bronze; aromatique; attrape insectes,,,6,12,sableux,6.0,8.0,juillet-septembre,jaune,non,-15,faible,5.50
+Centaurée (Centaurea montana),vivace,plein_soleil,limoneux,continental,0.5,0.5,0.4,05-07,caduc,bleu,Mellifère; naturaliste; supporte calcaire,,,6,12,limoneux,6.0,8.5,mai-juillet,bleu-violet,non,-25,faible,4.00
+Digitale (Digitalis purpurea),vivace,mi_ombre,limoneux,oceanique,1.2,0.5,0.5,05-07,caduc,rose-blanc,Bisannuelle; effet naturel; toxique,,,3,6,limoneux,5.5,7.0,mai-juillet,rose-blanc,non,-20,faible,3.50
+Monarde (Monarda didyma),vivace,plein_soleil,limoneux,continental,0.9,0.6,0.5,06-08,caduc,rouge,Sol frais; mellifère; aromatique,,,6,12,limoneux,6.0,7.0,juin-août,rouge-rose,non,-25,moyen,6.00
+Phlox paniculata,vivace,plein_soleil,limoneux,continental,0.9,0.6,0.5,07-09,caduc,rose,Sol frais-humide; parfumé; oïdium à prévenir,,,6,12,limoneux,6.0,7.5,juillet-septembre,rose-blanc-violet,non,-30,moyen,6.50
+Agastache,vivace,plein_soleil,sableux,continental,0.8,0.5,0.5,06-09,caduc,bleu-orange,Mellifère; parfumé; anis; résistant sécheresse,,,6,12,limono-sableux,6.0,7.5,juin-septembre,bleu-orange,non,-20,faible,6.00
+Salvia nemorosa,vivace,plein_soleil,limoneux,continental,0.6,0.5,0.4,05-07,caduc,violet,Très mellifère; supporte calcaire et sec,,,6,12,limono-sableux,6.5,8.0,mai-juillet,violet-pourpre,non,-25,faible,5.50
+Anémone du Japon (Anemone x hybrida),vivace,mi_ombre,limoneux,oceanique,1.0,0.6,0.5,08-10,caduc,rose-blanc,Floraison automnale précieuse; se naturalise,,,2,6,limoneux,5.5,7.0,août-octobre,rose-blanc,non,-25,faible,7.50
+Brunnera macrophylla,vivace,ombre,limoneux,oceanique,0.4,0.5,0.4,03-05,caduc,bleu,Feuillage panaché; floraison printanière; ombre,,,0,3,limoneux,5.5,7.0,mars-mai,bleu myosotis,non,-25,faible,7.00
+Épimède (Epimedium),vivace,ombre,limoneux,oceanique,0.3,0.4,0.3,03-05,persistant,rose-jaune,Couvre-sol ombre sèche; très résistant,,,0,3,limoneux,5.5,7.0,mars-mai,rose-jaune-blanc,oui,-25,faible,8.50
+Carex (Carex morrowii),graminee,mi_ombre,limoneux,oceanique,0.4,0.4,0.4,00-00,persistant,vert,Graminée persistante; ombre partielle; bordure,,,2,6,limono-argileux,5.5,7.5,,vert panaché (pas de fleur),oui,-20,faible,7.00
+Bambou de jardin (Fargesia murielae),graminee,mi_ombre,limoneux,oceanique,2.0,1.5,1.2,00-00,persistant,vert,Non traçant; haie; brise-vent; rustique,,,3,6,limoneux,5.5,7.5,,vert (pas de fleur),oui,-25,faible,25.00
+Pittosporum nain 'Nanum',arbuste,mi_ombre,limoneux,oceanique,0.8,0.8,0.6,04-06,persistant,vert foncé,Petite haie; topaire; facile,,,3,6,limoneux,6.0,7.5,avril-juin,blanc (rare),oui,-10,faible,12.00
+Cotonéaster (Cotoneaster horizontalis),arbuste,plein_soleil,limoneux,continental,0.5,1.5,1.2,05-06,caduc,blanc,Couvre-sol; baies rouges; résistant,,,5,12,limoneux,6.0,8.0,mai-juin,blanc (baies rouges),non,-25,faible,8.00
+Troène (Ligustrum ovalifolium),arbuste,mi_ombre,limoneux,oceanique,3.0,1.5,1.0,05-07,persistant,vert,Haie taillée; rapide; facile; baies toxiques,,,3,8,limoneux,5.5,8.0,mai-juillet,blanc (parfumé),oui,-15,moyen,7.00
+Prunus laurocerasus (Laurier palme),arbuste,mi_ombre,limoneux,oceanique,3.0,2.0,1.5,03-05,persistant,vert,Haie dense; rapide; résistant,,,2,7,limoneux,6.0,8.0,mars-mai,blanc,oui,-15,faible,12.00
+Sureaux (Sambucus nigra),arbuste,plein_soleil,limoneux,oceanique,4.0,3.0,2.5,05-07,caduc,blanc,Croissance rapide; baies comestibles; mellifère,,,5,12,limoneux,5.5,7.5,mai-juillet,blanc crème,non,-25,moyen,10.00
+If (Taxus baccata),arbuste,mi_ombre,limoneux,oceanique,4.0,2.0,1.5,00-00,persistant,vert,Haie classique; taille; très longévif; toxique,,,2,8,limoneux,5.5,7.5,,vert (baies rouges),oui,-25,moyen,18.00
+Spirée (Spiraea japonica),arbuste,plein_soleil,limoneux,continental,1.0,1.0,0.8,05-08,caduc,rose,Facile; floraison estivale; mellifère,,,6,12,limoneux,5.5,7.5,mai-août,rose-blanc,non,-30,faible,8.00
+Potentille (Potentilla fruticosa),arbuste,plein_soleil,limoneux,continental,0.8,0.8,0.7,05-10,caduc,jaune,Très longue floraison; rustique; adaptable,,,6,12,limono-sableux,5.5,8.0,mai-octobre,jaune-blanc-rose,non,-35,faible,7.00
+Weigelia (Weigela florida),arbuste,plein_soleil,limoneux,continental,1.5,1.5,1.2,05-06,caduc,rose,Floraison printanière abondante; facile,,,5,12,limoneux,5.5,7.5,mai-juin,rose-rouge,non,-25,faible,10.00
+Deutzia,arbuste,plein_soleil,limoneux,continental,1.5,1.2,1.0,05-06,caduc,blanc,Floraison blanche abondante; rustique,,,5,12,limoneux,5.5,7.5,mai-juin,blanc,non,-25,faible,9.00
+Forsythia,arbuste,plein_soleil,limoneux,continental,2.5,2.0,1.5,03-04,caduc,jaune,Floraison très précoce; rustique; taille post-flo,,,5,12,limoneux,6.0,7.5,mars-avril,jaune vif,non,-30,faible,8.00
+Lilas (Syringa vulgaris),arbuste,plein_soleil,limoneux,continental,3.0,2.5,2.0,04-06,caduc,violet,Parfumé; printemps; rustique; supporte calcaire,,,6,12,limoneux,6.0,8.0,avril-juin,violet-blanc-rose,non,-35,faible,12.00
+Mahonia aquifolium,arbuste,ombre,limoneux,oceanique,1.2,1.2,1.0,02-04,persistant,jaune,Épines; baies bleues; floraison hivernale,,,0,5,limoneux,5.5,7.5,février-avril,jaune,oui,-20,faible,11.00
+Nandina domestica,arbuste,mi_ombre,limoneux,oceanique,1.0,0.8,0.7,05-07,persistant,rouge-vert,Feuillage coloré; fruits rouges hivernaux,,,2,6,limoneux,5.5,7.5,mai-juillet,blanc (baies rouges),oui,-10,faible,14.00
+Abelia x grandiflora,arbuste,plein_soleil,limoneux,oceanique,1.5,1.5,1.2,06-11,caduc,blanc-rose,Floraison très longue; mellifère; semi-persistant,,,5,12,limono-sableux,6.0,8.0,juin-novembre,blanc-rose,non,-15,faible,13.00

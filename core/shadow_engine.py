@@ -1,197 +1,350 @@
 # -*- coding: utf-8 -*-
 # core/shadow_engine.py
 """
-Moteur de calcul des ombres sophistiqué.
-Gère :
-  - Ombres de la maison
-  - Ombres des haies/murs (segments)
-  - Projection des ombres selon la position du soleil (pvlib)
-  - Relief du terrain (optionnel)
+Moteur d'ombres central et autoritaire — pvlib + shapely.
+Fonctions principales :
+  - SunPosition          : position solaire calculée via pvlib
+  - apply_slope_correction : correction altitude par pente du terrain
+  - project_shadow       : polygone d'ombre d'un obstacle
+  - sun_hours_grid       : grille 2D float32 d'heures de soleil
+  - shadows_snapshot     : polygones d'ombre à un instant T
+  - terrain_to_obstacles : conversion TerrainInput → obstacles shapely
 """
 import math
-from typing import Tuple, List, Optional
 from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+import pvlib
+from shapely.geometry import (
+    LineString, MultiPoint, Point, Polygon, box, MultiPolygon
+)
+from shapely.ops import unary_union
 
 
-@dataclass(frozen=True)
+# ── Position solaire ─────────────────────────────────────────────────────────
+
+@dataclass
 class SunPosition:
-    """Position du soleil : altitude et azimut en degrés."""
-    altitude_deg: float
+    """Position du soleil : azimut et élévation en degrés."""
     azimuth_deg: float
+    elevation_deg: float
 
+    @classmethod
+    def from_datetime(
+        cls,
+        dt: Union[datetime, "pd.Timestamp"],
+        lat: float,
+        lon: float,
+        tz: str = "Europe/Paris",
+    ) -> "SunPosition":
+        """Calcule la position solaire via pvlib pour un instant donné."""
+        if isinstance(dt, datetime) and dt.tzinfo is None:
+            ts = pd.DatetimeIndex([dt]).tz_localize(tz)
+        else:
+            ts = pd.DatetimeIndex([pd.Timestamp(dt)])
+            if ts.tz is None:
+                ts = ts.tz_localize(tz)
+        solpos = pvlib.solarposition.get_solarposition(ts, lat, lon)
+        return cls(
+            azimuth_deg=float(solpos["azimuth"].iloc[0]),
+            elevation_deg=float(solpos["apparent_elevation"].iloc[0]),
+        )
+
+    def is_above_horizon(self) -> bool:
+        return self.elevation_deg > 0.0
+
+
+# ── Correction relief ─────────────────────────────────────────────────────────
+
+def apply_slope_correction(
+    elevation_deg: float,
+    azimuth_deg: float,
+    slope_pct: float,
+    slope_orientation_deg: float,
+) -> float:
+    """
+    Corrige l'altitude solaire effective selon la pente du terrain.
+    Formule : elevation_eff = elevation + slope_pct/100 * cos(az - slope_or) * 30
+    Borné entre 0 et 90°.
+    """
+    if slope_pct <= 0:
+        return elevation_deg
+    az_rad = math.radians(azimuth_deg - slope_orientation_deg)
+    correction = (slope_pct / 100.0) * math.cos(az_rad) * 30.0
+    return float(np.clip(elevation_deg + correction, 0.0, 90.0))
+
+
+# ── Projection d'ombre ────────────────────────────────────────────────────────
+
+def project_shadow(
+    geometry: Union[Polygon, LineString],
+    height: float,
+    sun_position: SunPosition,
+    parcel_rotation: float = 0.0,
+    slope_pct: float = 0.0,
+    slope_orientation_deg: float = 0.0,
+) -> Optional[Polygon]:
+    """
+    Projette l'ombre d'un obstacle (Polygon ou LineString) au sol.
+    Retourne un polygone shapely ou None si le soleil est sous l'horizon.
+    """
+    elevation_eff = apply_slope_correction(
+        sun_position.elevation_deg,
+        sun_position.azimuth_deg,
+        slope_pct,
+        slope_orientation_deg,
+    )
+    if elevation_eff <= 0.0:
+        return None
+
+    alt_rad = math.radians(max(0.5, elevation_eff))
+    shadow_len = float(height) / math.tan(alt_rad)
+
+    # Azimut dans le repère du terrain (rotation parcelle)
+    az_plan = (sun_position.azimuth_deg - parcel_rotation) % 360.0
+    az_rad = math.radians(az_plan)
+    # Direction de l'ombre (opposée au soleil)
+    sdx = -math.sin(az_rad)
+    sdy = -math.cos(az_rad)
+
+    # Coins de la géométrie
+    if isinstance(geometry, Polygon):
+        coords = list(geometry.exterior.coords[:-1])  # sans doublon final
+    elif isinstance(geometry, LineString):
+        coords = list(geometry.coords)
+    else:
+        return None
+
+    if not coords:
+        return None
+
+    proj_coords = [(x + sdx * shadow_len, y + sdy * shadow_len) for x, y in coords]
+    all_pts = coords + proj_coords
+
+    if len(all_pts) < 3:
+        return None
+
+    shadow_poly = MultiPoint(all_pts).convex_hull
+    if hasattr(shadow_poly, "area") and shadow_poly.area > 1e-6:
+        if shadow_poly.geom_type == "Polygon":
+            return shadow_poly
+    return None
+
+
+# ── Grille d'heures de soleil ─────────────────────────────────────────────────
+
+def sun_hours_grid(
+    parcel: Polygon,
+    obstacles: List[Tuple],
+    date: Union[datetime, str],
+    lat: float,
+    lon: float,
+    parcel_rotation: float = 0.0,
+    resolution_m: float = 1.0,
+    time_step_min: int = 15,
+    tz: str = "Europe/Paris",
+    slope_pct: float = 0.0,
+    slope_orientation_deg: float = 0.0,
+    start_hour: int = 5,
+    end_hour: int = 21,
+) -> Tuple[np.ndarray, dict]:
+    """
+    Calcule la grille 2D float32 d'heures de soleil par cellule sur une journée.
+    Retourne (grille np.ndarray shape (ny, nx), meta dict).
+    """
+    minx, miny, maxx, maxy = parcel.bounds
+    xs = np.arange(minx + resolution_m / 2, maxx, resolution_m)
+    ys = np.arange(miny + resolution_m / 2, maxy, resolution_m)
+    nx, ny = len(xs), len(ys)
+    grid = np.zeros((ny, nx), dtype=np.float32)
+
+    # Positions solaires sur la plage horaire demandée
+    date_str = date.strftime("%Y-%m-%d") if isinstance(date, datetime) else str(date)
+    start = pd.Timestamp(f"{date_str} {start_hour:02d}:00:00", tz=tz)
+    end = pd.Timestamp(f"{date_str} {end_hour:02d}:00:00", tz=tz)
+    times = pd.date_range(start=start, end=end, freq=f"{time_step_min}min")
+    solpos = pvlib.solarposition.get_solarposition(times, lat, lon)
+
+    sun_steps = [
+        (float(row["azimuth"]), float(row["apparent_elevation"]))
+        for _, row in solpos.iterrows()
+        if float(row["apparent_elevation"]) > 0.0
+    ]
+    n_steps = len(sun_steps)
+    max_hours = n_steps * time_step_min / 60.0
+
+    meta = {
+        "bbox": [minx, miny, maxx, maxy],
+        "pas_m": resolution_m,
+        "nx": int(nx),
+        "ny": int(ny),
+        "max_hours": float(max_hours),
+        "n_steps": n_steps,
+        "step_min": time_step_min,
+    }
+
+    if n_steps == 0 or nx == 0 or ny == 0:
+        return grid, meta
+
+    # Précalcul de la liste de points et appartenance à la parcelle
+    pts_geom = [Point(xs[ix], ys[iy]) for iy in range(ny) for ix in range(nx)]
+    in_parcel = [parcel.contains(p) for p in pts_geom]
+    step_h = time_step_min / 60.0
+
+    for az, elev in sun_steps:
+        sun_pos = SunPosition(azimuth_deg=az, elevation_deg=elev)
+        elev_eff = apply_slope_correction(elev, az, slope_pct, slope_orientation_deg)
+        if elev_eff <= 0:
+            continue
+
+        # Union des ombres au pas de temps courant
+        shadows_list = []
+        for geom, h in obstacles:
+            sh = project_shadow(geom, h, sun_pos, parcel_rotation, slope_pct, slope_orientation_deg)
+            if sh is not None:
+                sh_clipped = sh.intersection(parcel)
+                if not sh_clipped.is_empty:
+                    shadows_list.append(sh_clipped)
+
+        shadow_union = unary_union(shadows_list) if shadows_list else None
+
+        # Accumulation d'heures de soleil par cellule
+        for idx, (pt, in_p) in enumerate(zip(pts_geom, in_parcel)):
+            if not in_p:
+                continue
+            if shadow_union is None or not shadow_union.contains(pt):
+                iy, ix = divmod(idx, nx)
+                grid[iy, ix] += step_h
+
+    return grid, meta
+
+
+# ── Snapshot d'ombres ─────────────────────────────────────────────────────────
+
+def shadows_snapshot(
+    parcel: Polygon,
+    obstacles: List[Tuple],
+    datetime_iso: str,
+    lat: float,
+    lon: float,
+    parcel_rotation: float = 0.0,
+    tz: str = "Europe/Paris",
+    slope_pct: float = 0.0,
+    slope_orientation_deg: float = 0.0,
+) -> List[List[Tuple[float, float]]]:
+    """
+    Retourne les polygones d'ombre à un instant T, clippés à la parcelle.
+    Format : liste de liste de (x, y).
+    """
+    dt = pd.Timestamp(datetime_iso)
+    if dt.tz is None:
+        dt = dt.tz_localize(tz)
+    solpos = pvlib.solarposition.get_solarposition(
+        pd.DatetimeIndex([dt]), lat, lon
+    )
+    az = float(solpos["azimuth"].iloc[0])
+    elev = float(solpos["apparent_elevation"].iloc[0])
+    sun_pos = SunPosition(azimuth_deg=az, elevation_deg=elev)
+
+    if not sun_pos.is_above_horizon():
+        return []
+
+    polygons_coords = []
+    for geom, h in obstacles:
+        sh = project_shadow(geom, h, sun_pos, parcel_rotation, slope_pct, slope_orientation_deg)
+        if sh is None:
+            continue
+        sh_clipped = sh.intersection(parcel)
+        if sh_clipped.is_empty:
+            continue
+        if sh_clipped.geom_type == "Polygon":
+            polygons_coords.append(
+                [(float(x), float(y)) for x, y in sh_clipped.exterior.coords]
+            )
+        elif sh_clipped.geom_type in ("MultiPolygon", "GeometryCollection"):
+            for part in getattr(sh_clipped, "geoms", []):
+                if part.geom_type == "Polygon":
+                    polygons_coords.append(
+                        [(float(x), float(y)) for x, y in part.exterior.coords]
+                    )
+
+    return polygons_coords
+
+
+# ── Conversion TerrainInput → obstacles shapely ──────────────────────────────
+
+def terrain_to_obstacles(terrain) -> List[Tuple]:
+    """
+    Convertit un TerrainInput en liste de (geometry shapely, hauteur en m).
+    Inclut maisons, extensions, haies manuelles et haies auto.
+    """
+    result = []
+
+    # Blocs maison/extensions → rectangles shapely
+    for m in terrain.get_blocs_maison():
+        ox, oy = float(m.origine[0]), float(m.origine[1])
+        w, h = float(m.largeur), float(m.hauteur)
+        geom = box(ox, oy, ox + w, oy + h)
+        result.append((geom, float(m.hauteur_batiment)))
+
+    # Haies/murs manuels (ObstacleSegment)
+    for obs in (terrain.obstacles or []):
+        ax, ay = float(obs.a[0]), float(obs.a[1])
+        bx, by = float(obs.b[0]), float(obs.b[1])
+        geom = LineString([(ax, ay), (bx, by)])
+        result.append((geom, float(obs.hauteur)))
+
+    # Haies auto-générées (côtés de la maison ou lisière)
+    from core.services import generate_obstacles_from_haies_auto
+    for ao in generate_obstacles_from_haies_auto(terrain):
+        ax, ay = float(ao["a"][0]), float(ao["a"][1])
+        bx, by = float(ao["b"][0]), float(ao["b"][1])
+        geom = LineString([(ax, ay), (bx, by)])
+        result.append((geom, float(ao["hauteur"])))
+
+    return result
+
+
+# ── Classe wrapper rétrocompatible ────────────────────────────────────────────
 
 class ShadowEngine:
-    """Moteur de calcul des ombres pour un terrain."""
-    
+    """
+    Wrapper rétrocompatible — gardé pour ne pas casser les anciens imports.
+    Délègue vers les nouvelles fonctions pvlib/shapely.
+    """
+
     def __init__(self, terrain_orientation_deg: float = 0.0):
-        """
-        Args:
-            terrain_orientation_deg: Orientation du nord du terrain (0-360°).
-                                    0° = nord vers le haut, 90° = nord vers la droite, etc.
-        """
         self.north_offset = float(terrain_orientation_deg)
-    
+
+    def _make_sun_pos(self, sun_pos) -> SunPosition:
+        elev = getattr(sun_pos, "altitude_deg",
+               getattr(sun_pos, "elevation_deg", 0.0))
+        return SunPosition(
+            azimuth_deg=float(sun_pos.azimuth_deg),
+            elevation_deg=float(elev),
+        )
+
     def is_point_in_shadow_by_house(
-        self,
-        point: Tuple[float, float],
-        house_origin: Tuple[float, float],
-        house_width: float,
-        house_height: float,
-        house_building_height: float,
-        sun_pos: SunPosition,
+        self, point, house_origin, house_width, house_height,
+        house_building_height, sun_pos,
     ) -> bool:
-        """
-        Teste si un point est dans l'ombre d'un bâtiment rectangulaire.
-        
-        Modèle simplifié mais efficace :
-        1. Le bâtiment projette une ombre conique selon l'altitude du soleil
-        2. On teste si le point est dans cette zone d'ombre
-        """
-        if sun_pos.altitude_deg <= 0.0:
-            return False
-        
-        # Calcul de la longueur de l'ombre projetée
-        alt_rad = math.radians(max(1.0, sun_pos.altitude_deg))
-        shadow_length = house_building_height / math.tan(alt_rad)
-        
-        # Ajustement de l'azimut dans le repère du terrain
-        azimuth_in_terrain = (sun_pos.azimuth_deg - self.north_offset) % 360.0
-        azimuth_rad = math.radians(azimuth_in_terrain)
-        
-        # Direction de l'ombre (opposite au soleil)
-        shadow_dir_x = -math.sin(azimuth_rad)
-        shadow_dir_y = -math.cos(azimuth_rad)
-        
-        # Rotation du point et du bâtiment dans le repère du terrain
-        px, py = self._rotate_point(*point, -self.north_offset)
-        ho_x, ho_y = self._rotate_point(*house_origin, -self.north_offset)
-        
-        # Limites du bâtiment
-        h_x1, h_y1 = ho_x, ho_y
-        h_x2, h_y2 = ho_x + house_width, ho_y + house_height
-        
-        # Test 1 : le point est-il directement sur le bâtiment ?
-        if h_x1 <= px <= h_x2 and h_y1 <= py <= h_y2:
-            return True
-        
-        # Test 2 : le point est-il dans la projection de l'ombre ?
-        # Centre du bâtiment
-        h_cx, h_cy = (h_x1 + h_x2) / 2.0, (h_y1 + h_y2) / 2.0
-        
-        # Vecteur du centre du bâtiment vers le point
-        v_x = px - h_cx
-        v_y = py - h_cy
-        
-        # Distance le long de la direction de l'ombre
-        t = v_x * shadow_dir_x + v_y * shadow_dir_y
-        
-        # Est-ce que le point est derrière le bâtiment dans la direction de l'ombre ?
-        if t <= 0 or t > shadow_length:
-            return False
-        
-        # Projection du point perpendiculaire à la direction de l'ombre
-        p_x = v_x - t * shadow_dir_x
-        p_y = v_y - t * shadow_dir_y
-        
-        # Rayon approximatif du bâtiment pour la projection
-        h_radius = 0.5 * math.hypot(house_width, house_height)
-        
-        return math.hypot(p_x, p_y) <= h_radius
-    
+        geom = box(
+            float(house_origin[0]), float(house_origin[1]),
+            float(house_origin[0]) + house_width,
+            float(house_origin[1]) + house_height,
+        )
+        sp = self._make_sun_pos(sun_pos)
+        shadow = project_shadow(geom, float(house_building_height), sp, self.north_offset)
+        return shadow is not None and shadow.contains(Point(float(point[0]), float(point[1])))
+
     def is_point_in_shadow_by_hedge(
-        self,
-        point: Tuple[float, float],
-        hedge_a: Tuple[float, float],
-        hedge_b: Tuple[float, float],
-        hedge_height: float,
-        sun_pos: SunPosition,
+        self, point, hedge_a, hedge_b, hedge_height, sun_pos,
         hedge_thickness: float = 0.3,
     ) -> bool:
-        """
-        Teste si un point est dans l'ombre d'une haie/mur (segment vertical).
-        
-        Modèle :
-        1. La haie est modélisée comme un segment dans le plan du terrain
-        2. L'ombre est projetée perpendiculairement selon l'altitude du soleil
-        3. On teste si le point est dans cette zone d'ombre
-        """
-        if sun_pos.altitude_deg <= 0.0:
-            return False
-        
-        # Calcul de la longueur de l'ombre
-        alt_rad = math.radians(max(1.0, sun_pos.altitude_deg))
-        shadow_length = hedge_height / math.tan(alt_rad)
-        
-        # Ajustement de l'azimut
-        azimuth_in_terrain = (sun_pos.azimuth_deg - self.north_offset) % 360.0
-        azimuth_rad = math.radians(azimuth_in_terrain)
-        
-        # Direction de l'ombre
-        shadow_dir_x = -math.sin(azimuth_rad)
-        shadow_dir_y = -math.cos(azimuth_rad)
-        
-        # Rotation du point et du segment dans le repère du terrain
-        px, py = self._rotate_point(*point, -self.north_offset)
-        ha_x, ha_y = self._rotate_point(*hedge_a, -self.north_offset)
-        hb_x, hb_y = self._rotate_point(*hedge_b, -self.north_offset)
-        
-        # Distance perpendiculaire du point au segment de haie
-        perp_dist = self._distance_point_to_segment(
-            (px, py), (ha_x, ha_y), (hb_x, hb_y)
-        )
-        
-        # Est-ce que le point est suffisamment proche du segment ?
-        if perp_dist > hedge_thickness:
-            return False
-        
-        # Centre du segment
-        seg_cx = (ha_x + hb_x) / 2.0
-        seg_cy = (ha_y + hb_y) / 2.0
-        
-        # Vecteur du centre du segment vers le point
-        v_x = px - seg_cx
-        v_y = py - seg_cy
-        
-        # Distance le long de la direction de l'ombre
-        t = v_x * shadow_dir_x + v_y * shadow_dir_y
-        
-        # Est-ce dans la zone d'ombre ?
-        return 0 < t <= shadow_length
-    
-    @staticmethod
-    def _rotate_point(x: float, y: float, angle_deg: float) -> Tuple[float, float]:
-        """Rotate un point (x, y) par un angle en degrés autour de l'origine."""
-        angle_rad = math.radians(angle_deg)
-        cos_a = math.cos(angle_rad)
-        sin_a = math.sin(angle_rad)
-        return (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
-    
-    @staticmethod
-    def _distance_point_to_segment(
-        point: Tuple[float, float],
-        seg_a: Tuple[float, float],
-        seg_b: Tuple[float, float],
-    ) -> float:
-        """Distance perpendiculaire d'un point à un segment."""
-        px, py = point
-        ax, ay = seg_a
-        bx, by = seg_b
-        
-        # Vecteurs
-        ab_x = bx - ax
-        ab_y = by - ay
-        ap_x = px - ax
-        ap_y = py - ay
-        
-        ab_len_sq = ab_x * ab_x + ab_y * ab_y
-        if ab_len_sq < 1e-12:
-            return math.hypot(px - ax, py - ay)
-        
-        # Projection sur le segment
-        t = max(0.0, min(1.0, (ap_x * ab_x + ap_y * ab_y) / ab_len_sq))
-        
-        # Point le plus proche sur le segment
-        closest_x = ax + t * ab_x
-        closest_y = ay + t * ab_y
-        
-        return math.hypot(px - closest_x, py - closest_y)
+        geom = LineString([hedge_a, hedge_b]).buffer(hedge_thickness / 2)
+        sp = self._make_sun_pos(sun_pos)
+        shadow = project_shadow(geom, float(hedge_height), sp, self.north_offset)
+        return shadow is not None and shadow.contains(Point(float(point[0]), float(point[1])))
