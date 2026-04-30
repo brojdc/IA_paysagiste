@@ -2,15 +2,18 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>IA Paysagiste — Éditeur de terrain</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/editor.css">
+  <link rel="stylesheet" href="/css/style.css?v=6">
+  <link rel="stylesheet" href="/css/editor.css?v=6">
 </head>
-<body class="editor-page">
+<body class="editor-page" style="overflow:hidden;">
 
   <!-- ═══ Nav ════════════════════════════════════════════════════════ -->
   <nav class="saas-nav" id="saas-nav">
@@ -191,6 +194,38 @@
                        title="Profondeur de la parcelle (m)" aria-label="Profondeur parcelle (m)">
                 <span class="parcel-unit">m</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Dimensions maison -->
+          <div class="sidebar-section-title" style="font-size:0.78rem;margin-top:0.7rem;padding:0 0 0.3rem;">
+            <span class="section-icon">🏠</span> Dimensions maison
+          </div>
+          <div class="sidebar-parcel-inputs">
+            <div class="parcel-field">
+              <label class="parcel-field-label">Largeur</label>
+              <div class="parcel-field-row">
+                <input type="number" id="editor-house-w" value="10" min="2" max="100" step="0.5"
+                       title="Largeur de la maison (m)" aria-label="Largeur maison (m)">
+                <span class="parcel-unit">m</span>
+              </div>
+            </div>
+            <div class="parcel-sep">×</div>
+            <div class="parcel-field">
+              <label class="parcel-field-label">Profondeur</label>
+              <div class="parcel-field-row">
+                <input type="number" id="editor-house-h" value="8" min="2" max="100" step="0.5"
+                       title="Profondeur de la maison (m)" aria-label="Profondeur maison (m)">
+                <span class="parcel-unit">m</span>
+              </div>
+            </div>
+          </div>
+          <div class="parcel-field" style="margin-top:0.35rem;">
+            <label class="parcel-field-label">Ou saisir la surface</label>
+            <div class="parcel-field-row">
+              <input type="number" id="editor-house-surf" value="80" min="4" max="10000" step="1"
+                     title="Surface de la maison en m² → calcule Largeur × Profondeur (carré)" aria-label="Surface maison (m²)">
+              <span class="parcel-unit">m²</span>
             </div>
           </div>
 
@@ -618,9 +653,9 @@
 
   <!-- ═══ Scripts ═════════════════════════════════════════════════════ -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="/js/canvas_editor.js"></script>
-  <script src="/js/app.js"></script>
-  <script src="/js/chat.js"></script>
+  <script src="/js/canvas_editor.js?v=6"></script>
+  <script src="/js/app.js?v=6"></script>
+  <script src="/js/chat.js?v=6"></script>
 
   <script>
     /* ── Tab navigation ─────────────────────────────────── */

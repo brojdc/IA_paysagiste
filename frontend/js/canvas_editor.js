@@ -8,7 +8,7 @@
 
 // ─── CONSTANTES ─────────────────────────────────────────────────────────────
 const SNAP_M   = 0.1;
-const MARGIN   = 44;
+const MARGIN   = 80;
 const HANDLE_R = 7;
 const HEDGE_W  = 6;
 const MIN_DIM  = 0.5;
@@ -201,6 +201,28 @@ function initEditor() {
   bindInput('editor-parcel-w', v => { E.parcel.w = parseFloat(v) || 20; pushHistory(); fitCanvas(); afterChange(); });
   bindInput('editor-parcel-h', v => { E.parcel.h = parseFloat(v) || 15; pushHistory(); fitCanvas(); afterChange(); });
 
+  // Dimensions maison (sync bidirectionnel w×h ↔ surface)
+  bindInput('editor-house-w', v => {
+    E.house.w = Math.max(1, parseFloat(v) || 10);
+    setVal('editor-house-surf', (E.house.w * E.house.h).toFixed(0));
+    pushHistory(); afterChange();
+  });
+  bindInput('editor-house-h', v => {
+    E.house.h = Math.max(1, parseFloat(v) || 8);
+    setVal('editor-house-surf', (E.house.w * E.house.h).toFixed(0));
+    pushHistory(); afterChange();
+  });
+  bindInput('editor-house-surf', v => {
+    const surf = Math.max(4, parseFloat(v) || 80);
+    // Garde le ratio actuel w/h et redimensionne à la nouvelle surface
+    const ratio = E.house.w / E.house.h;
+    E.house.h = Math.round(Math.sqrt(surf / ratio) * 2) / 2;
+    E.house.w = Math.round((surf / E.house.h) * 2) / 2;
+    setVal('editor-house-w', E.house.w);
+    setVal('editor-house-h', E.house.h);
+    pushHistory(); afterChange();
+  });
+
   const northSlider = document.getElementById('editor-north');
   if (northSlider) {
     northSlider.addEventListener('input', () => {
@@ -269,13 +291,19 @@ function bindInput(id, fn) {
 function fitCanvas() {
   const wrapper = document.getElementById('editor-wrapper');
   if (!wrapper || !canvas) return;
-  const W = wrapper.clientWidth  || 600;
-  const H = wrapper.clientHeight || 440;
+  const W = wrapper.clientWidth  || 800;
+  const H = wrapper.clientHeight || 500;
   canvas.width  = W;
   canvas.height = H;
   const availW = W - 2 * MARGIN;
   const availH = H - 2 * MARGIN;
-  scale = Math.min(availW / E.parcel.w, availH / E.parcel.h);
+  // Parcelle occupe ~70% de l'espace dispo, entre 18 et 60 px/m
+  scale = Math.min(availW * 0.70 / E.parcel.w, availH * 0.70 / E.parcel.h);
+  scale = Math.max(18, Math.min(scale, 60));
+  // Centrage de la parcelle dans le canvas
+  E.zoom   = 1;
+  E.panOffX = (W - E.parcel.w * scale) / 2 - MARGIN;
+  E.panOffY = (H - E.parcel.h * scale) / 2 - MARGIN;
   render();
 }
 
@@ -287,6 +315,9 @@ function fitToScreen() {
 function syncStateToInputs() {
   setVal('editor-parcel-w', E.parcel.w);
   setVal('editor-parcel-h', E.parcel.h);
+  setVal('editor-house-w',  E.house.w);
+  setVal('editor-house-h',  E.house.h);
+  setVal('editor-house-surf', (E.house.w * E.house.h).toFixed(0));
   setVal('editor-north',    E.northDeg);
   setElText('editor-north-val', Math.round(E.northDeg) + '°');
   setVal('editor-lat',  E.lat);
@@ -316,8 +347,8 @@ function afterChange() { render(); updateSynthesis(); notifyPayloadChange(); }
 // ─── ZOOM / PAN ──────────────────────────────────────────────────────────────
 function onWheel(e) {
   e.preventDefault();
-  const factor = e.deltaY < 0 ? 1.12 : 0.9;
-  E.zoom = Math.max(0.15, Math.min(10, E.zoom * factor));
+  const factor = e.deltaY < 0 ? 1.12 : 0.90;
+  E.zoom = Math.max(0.2, Math.min(8, E.zoom * factor));
   render();
 }
 
@@ -527,7 +558,7 @@ function onDown(e) {
       E.hedgePt1 = { x: tx, y: ty };
       _showDrawControls(true);
     } else {
-      const hg = { id: nextId(), x1: E.hedgePt1.x, y1: E.hedgePt1.y, x2: tx, y2: ty, hM: 2 };
+      const hg = { id: nextId(), x1: E.hedgePt1.x, y1: E.hedgePt1.y, x2: tx, y2: ty, hM: 2, wM: 0.5 };
       E.hedges.push(hg);
       E.hedgePt1 = null; E.hedgePreview = null;
       addHedgeControl(hg);
@@ -565,14 +596,12 @@ function onDown(e) {
 }
 
 function onMove(e) {
-  // Pan clic-droit
   if (_isPanning) {
     E.panOffX = (e.clientX ?? e.pageX) - _panStartSX;
     E.panOffY = (e.clientY ?? e.pageY) - _panStartSY;
     render();
     return;
   }
-
   const { sx, sy } = canvasPos(e);
   const raw = s2t(sx, sy);
   const tx = snap(raw.x), ty = snap(raw.y);
@@ -602,6 +631,10 @@ function onMove(e) {
       E.house.x = snap(clampV(E.drag.startX + dx, 0, E.parcel.w - E.house.w));
       E.house.y = snap(clampV(E.drag.startY + dy, 0, E.parcel.h - E.house.h));
     }
+    // Sync temps réel des inputs maison pendant le drag
+    setVal('editor-house-w', E.house.w.toFixed(1));
+    setVal('editor-house-h', E.house.h.toFixed(1));
+    setVal('editor-house-surf', (E.house.w * E.house.h).toFixed(0));
   } else if (E.drag.type === 'terrace' && E.terrace) {
     if (E.drag.handle) applyResize(E.terrace, E.drag, dx, dy);
     else {
@@ -728,7 +761,7 @@ function onUp(e) {
 }
 
 function onLeave(e) {
-  if (e?.button === 2 || _isPanning) { _isPanning = false; }
+  if (_isPanning) _isPanning = false;
   if (E.drag) { E.drag = null; pushHistory(); afterChange(); }
   E.hedgePreview = null; E.massifPreview = null;
   if (E._drawRectState) E._drawRectState = null;
@@ -798,6 +831,7 @@ function render() {
   // UI
   drawRoseDVents();
   drawAxisLabels();
+  drawScaleBar();
   // Distances pendant resize/drag
   if (E.drag?.type === 'house' || E.drag?.type === 'terrace') drawDistances();
   // Previews tracé
@@ -1128,6 +1162,35 @@ function drawAxisLabels() {
   }
 }
 
+function drawScaleBar() {
+  const sc = effectiveScale();
+  const barM = 5;
+  const barPx = barM * sc;
+  // Position : sous la parcelle, alignée à gauche
+  const { x: px0, y: py0 } = t2s(0, 0);
+  const x0 = px0 + 4;
+  const y0 = py0 + 22;
+  if (y0 > canvas.height - 6 || x0 + barPx + 60 > canvas.width) return;
+
+  ctx.save();
+  ctx.strokeStyle = '#444'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0 - 5); ctx.lineTo(x0, y0 + 5);
+  ctx.moveTo(x0, y0); ctx.lineTo(x0 + barPx, y0);
+  ctx.moveTo(x0 + barPx, y0 - 5); ctx.lineTo(x0 + barPx, y0 + 5);
+  ctx.stroke();
+
+  ctx.fillStyle = '#333'; ctx.font = 'bold 10px Inter,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText(`${barM} m`, x0 + barPx / 2, y0 + 7);
+
+  // Échelle 1:X (basée sur 96 dpi)
+  const ratio = Math.round(1000 * 96 / (sc * 25.4));
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(`1 : ${ratio}`, x0 + barPx + 6, y0);
+  ctx.restore();
+}
+
 function drawDistances() {
   const rect = E.drag?.type === 'house' ? E.house : E.terrace;
   if (!rect) return;
@@ -1418,6 +1481,7 @@ function addHedgeControl(hg) {
   const len = Math.hypot(hg.x2 - hg.x1, hg.y2 - hg.y1).toFixed(1);
   const div = document.createElement('div');
   div.className = 'hedge-control-item'; div.id = `hedge-ctrl-${hg.id}`;
+  const wM = hg.wM ?? 0.5;
   div.innerHTML = `
     <div class="hedge-ctrl-header">
       <span class="hedge-ctrl-label">Haie ${len} m &mdash; angle ${ang}°</span>
@@ -1427,6 +1491,11 @@ function addHedgeControl(hg) {
       Hauteur <input type="range" min="0.5" max="6" step="0.1" value="${hg.hM}"
         oninput="updateHedgeH(${hg.id},this.value)">
       <span id="hedge-hval-${hg.id}">${hg.hM} m</span>
+    </label>
+    <label class="hedge-height-label">
+      Largeur <input type="range" min="0.2" max="3" step="0.1" value="${wM}"
+        oninput="updateHedgeW(${hg.id},this.value)">
+      <span id="hedge-wval-${hg.id}">${wM.toFixed(1)} m</span>
     </label>`;
   list.appendChild(div);
 }
@@ -1441,6 +1510,12 @@ function rebuildHedgeList() {
 function updateHedgeH(id, val) {
   const hg = E.hedges.find(h => h.id === id);
   if (hg) { hg.hM = parseFloat(val); setElText(`hedge-hval-${id}`, hg.hM.toFixed(1) + ' m'); }
+  afterChange();
+}
+
+function updateHedgeW(id, val) {
+  const hg = E.hedges.find(h => h.id === id);
+  if (hg) { hg.wM = parseFloat(val); setElText(`hedge-wval-${id}`, hg.wM.toFixed(1) + ' m'); }
   afterChange();
 }
 
@@ -1600,11 +1675,17 @@ function updateSynthesis() {
   const surfT = T ? +(T.w * T.h).toFixed(1) : 0;
   const surfJ = Math.max(0, surfP - surfH - surfExt - surfT).toFixed(1);
   const pct   = ((surfH + surfExt) / surfP * 100).toFixed(0);
-  const haiesLen = E.hedges.reduce((s, hg) => s + Math.hypot(hg.x2-hg.x1, hg.y2-hg.y1), 0).toFixed(1);
+  const haiesLen  = E.hedges.reduce((s, hg) => s + Math.hypot(hg.x2-hg.x1, hg.y2-hg.y1), 0).toFixed(1);
+  const haiesSurf = E.hedges.reduce((s, hg) => s + Math.hypot(hg.x2-hg.x1, hg.y2-hg.y1) * (hg.wM ?? 0.5), 0).toFixed(1);
   const closedMs = E.massifs.filter(m => m.closed && m.pts.length >= 3);
   const surfMs   = (closedMs.reduce((s, m) => s + polyArea(m.pts), 0) +
                     E.massifsRonds.reduce((s, m) => s + Math.PI * m.rx * m.ry, 0)).toFixed(1);
   const facadeDir = cardinalFromDeg(E.northDeg + 180);
+
+  // Sync inputs maison si redimensionnée par drag
+  setVal('editor-house-w',    H.w);
+  setVal('editor-house-h',    H.h);
+  setVal('editor-house-surf', (H.w * H.h).toFixed(0));
 
   setSynth('synth-surf-parc',   `${surfP} m²`);
   setSynth('synth-surf-maison', `${surfH} m² (${pct}% du terrain)`);
@@ -1612,7 +1693,7 @@ function updateSynthesis() {
   setSynth('synth-surf-terr',   T ? `${surfT} m²` : '—');
   setSynth('synth-orient-parc', `N + ${Math.round(E.northDeg)}°`);
   setSynth('synth-orient-mais', `Façade principale → ${facadeDir}`);
-  setSynth('synth-haies',       `${haiesLen} m linéaire`);
+  setSynth('synth-haies',       `${haiesLen} m lin. — ${haiesSurf} m²`);
   setSynth('synth-massifs',     `${closedMs.length + E.massifsRonds.length} massif(s) — ${surfMs} m²`);
 
   showPropsPanel();
@@ -1753,6 +1834,19 @@ async function checkLLMStatus() {
 }
 
 // ─── DÉMARRAGE ───────────────────────────────────────────────────────────────
+
+// Bloque le zoom navigateur : molette+Ctrl, pinch trackpad, raccourcis clavier
+window.addEventListener('wheel', e => {
+  if (e.ctrlKey) e.preventDefault();
+}, { passive: false });
+window.addEventListener('gesturestart',  e => e.preventDefault(), { passive: false });
+window.addEventListener('gesturechange', e => e.preventDefault(), { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+    e.preventDefault(); // bloque Ctrl+/- zoom navigateur
+  }
+}, { capture: true });
+
 document.addEventListener('DOMContentLoaded', () => {
   initEditor();
   checkLLMStatus();

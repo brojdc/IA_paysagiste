@@ -9,7 +9,7 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -572,5 +572,21 @@ def agent_chat(req: AgentChatRequest):
 
 # ── Frontend statique (doit être en dernier) ────────────────────────────────
 _frontend = os.path.join(os.path.dirname(__file__), "..", "frontend")
+
+NO_CACHE = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
 if os.path.isdir(_frontend):
+    # Route explicite pour la page principale — toujours sans cache
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse(
+            os.path.join(_frontend, "index.html"),
+            headers=NO_CACHE,
+        )
+
+    # Tous les autres fichiers statiques (CSS, JS, assets)
     app.mount("/", StaticFiles(directory=_frontend, html=True), name="frontend")

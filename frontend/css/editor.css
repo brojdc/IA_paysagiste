@@ -121,7 +121,7 @@
 
 .editor-layout {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 75fr 25fr;
   gap: 0;
   flex: 1;
   min-height: 0;
@@ -218,6 +218,7 @@
   top: 0;
   left: 0;
   cursor: crosshair;
+  touch-action: none; /* bloque pinch-zoom et scroll tactile sur le canvas */
 }
 
 #terrain-canvas.cursor-move    { cursor: move; }
