@@ -249,10 +249,17 @@
 .editor-sidebar {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;       /* le sidebar lui-même ne scrolle pas */
+  min-height: 0;          /* indispensable pour que le grid item soit contraint */
   background: #fff;
   gap: 0;
   min-width: 0;
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  overflow-y: auto;       /* seule cette zone intérieure scrolle */
+  min-height: 0;
 }
 
 .sidebar-section {
@@ -668,13 +675,13 @@
 /* ── Sidebar CTA ────────────────────────────────────────────────── */
 
 .sidebar-cta {
+  flex: 0 0 auto;         /* zone fixe, ne se compresse jamais */
   padding: 1rem;
   border-top: 2px solid #f0f0e8;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   background: #fafaf7;
-  flex-shrink: 0;
 }
 
 .btn-analyser-cta {
