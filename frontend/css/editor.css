@@ -122,10 +122,12 @@
 .editor-layout {
   display: grid;
   grid-template-columns: 75fr 25fr;
+  grid-template-rows: 1fr;   /* force la ligne à remplir la hauteur du conteneur */
   gap: 0;
   flex: 1;
   min-height: 0;
   height: calc(100vh - 56px - 33px);
+  overflow: hidden;           /* coupe tout débordement */
 }
 
 .editor-main {

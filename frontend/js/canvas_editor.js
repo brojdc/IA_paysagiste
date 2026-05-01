@@ -185,15 +185,15 @@ function initEditor() {
   });
   document.querySelectorAll('button[onclick="undo()"], button[title*="Ctrl+Z"], button[title*="Annuler"]').forEach(btn => btn.addEventListener('click', undo));
   document.querySelectorAll('button[onclick="redo()"], button[title*="Ctrl+Y"], button[title*="Rétablir"]').forEach(btn => btn.addEventListener('click', redo));
-  document.querySelectorAll('button[onclick="finishDraw()"], button[onclick="cancelDraw()"], button[onclick="fitToScreen()"], button[onclick="toggleSunSimulation()"], button[onclick="resetEditor()" ]')
+  document.querySelectorAll('button[onclick="finishDraw()"], button[onclick="cancelDraw()"], button[onclick="fitToScreen()"], button[onclick="resetEditor()"]')
     .forEach(btn => {
       const action = btn.getAttribute('onclick');
       if (action === 'finishDraw()') btn.addEventListener('click', finishDraw);
       if (action === 'cancelDraw()') btn.addEventListener('click', cancelDraw);
       if (action === 'fitToScreen()') btn.addEventListener('click', fitToScreen);
-      if (action === 'toggleSunSimulation()') btn.addEventListener('click', toggleSunSimulation);
       if (action === 'resetEditor()') btn.addEventListener('click', resetEditor);
     });
+  // toggleSunSimulation : géré uniquement via onclick= dans le HTML (pas de double-listener)
 
   // Clavier : Suppr (A4), Ctrl+Z/Y (A3)
   document.addEventListener('keydown', onKeyDown);
@@ -1386,10 +1386,11 @@ async function loadSunPositions() {
 function stopSunSimulation() {
   const btn = document.getElementById('btn-sun-sim');
   if (!E.sunPlaying) return;
+  console.log('[SUN] stop — idx:', E.sunIdx);
   E.sunPlaying = false;
   clearTimeout(E.sunTimer);
   E.sunTimer = null;
-  // Ne pas vider sunPositions : la dernière frame reste affichée
+  // sunPositions conservé : la dernière frame reste affichée
   if (btn) {
     btn.innerHTML = '<span class="tool-icon">☀️</span> Simuler';
     btn.classList.remove('active');
@@ -1409,6 +1410,7 @@ async function toggleSunSimulation() {
     if (btn) btn.textContent = 'Simuler la journée';
     return;
   }
+  console.log('[SUN] start —', E.sunPositions.length, 'positions');
   E.sunPlaying = true; E.sunIdx = 0;
   if (btn) { btn.innerHTML = '<span class="tool-icon">⏹</span> Arrêter'; btn.classList.add('active'); }
 
