@@ -245,6 +245,7 @@ function initEditor() {
   const hourSlider = document.getElementById('sun-hour-slider');
   if (hourSlider) {
     hourSlider.addEventListener('input', () => {
+      if (E.sunPlaying) stopSunSimulation();  // drag manuel = pause simulation
       const h = parseFloat(hourSlider.value);
       E.sunManualH = h;
       setElText('sun-hour-label', _formatHour(h));
@@ -1388,13 +1389,11 @@ function stopSunSimulation() {
   E.sunPlaying = false;
   clearTimeout(E.sunTimer);
   E.sunTimer = null;
-  E.sunPositions = [];
+  // Ne pas vider sunPositions : la dernière frame reste affichée
   if (btn) {
-    btn.textContent = 'Simuler la journée';
+    btn.innerHTML = '<span class="tool-icon">☀️</span> Simuler';
     btn.classList.remove('active');
   }
-  const disp = document.getElementById('sun-time-display');
-  if (disp) disp.style.display = 'none';
   render();
 }
 
@@ -1411,13 +1410,17 @@ async function toggleSunSimulation() {
     return;
   }
   E.sunPlaying = true; E.sunIdx = 0;
-  if (btn) { btn.textContent = 'Arrêter simulation'; btn.classList.add('active'); }
+  if (btn) { btn.innerHTML = '<span class="tool-icon">⏹</span> Arrêter'; btn.classList.add('active'); }
 
-  // A2 : durée totale 30 s à 1× → step = 30000 / n / speed
+  // durée totale 30 s à 1× → step = 30000 / n / speed
   const TOTAL_MS = 30000;
   function step() {
     if (!E.sunPlaying) return;
-    E.sunIdx = (E.sunIdx + 1) % E.sunPositions.length;
+    E.sunIdx++;
+    if (E.sunIdx >= E.sunPositions.length) {
+      stopSunSimulation();  // auto-stop en fin de journée
+      return;
+    }
     const sun = E.sunPositions[E.sunIdx];
     const disp = document.getElementById('sun-time-display');
     if (disp && sun) {
