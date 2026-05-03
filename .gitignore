@@ -7,3 +7,26 @@ venv/
 env/
 .env
 .env/
+
+# Dev tools
+.claude/
+.json/
+
+# Local backups
+backup_*/
+
+# Debug files
+debug_*.js
+*.tmp
+*.bak
+
+# Archives
+*.zip
+
+# Editors
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

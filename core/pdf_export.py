@@ -85,17 +85,18 @@ def _terrain_figure(terrain: TerrainInput, shadow_polygons=None, title="", figsi
             ha='center', va='center', fontsize=8, color='white', fontweight='bold', zorder=4,
         )
 
-    # Terrasse
-    t = terrain.terrasse
-    tx, ty = float(t.origine[0]), float(t.origine[1])
-    ax.add_patch(mpatches.Rectangle(
-        (tx, ty), float(t.largeur), float(t.hauteur),
-        facecolor='#d4b896', edgecolor='#8b6914', linewidth=1, alpha=0.85, zorder=3,
-    ))
-    ax.text(
-        tx + t.largeur / 2, ty + t.hauteur / 2, 'Terrasse',
-        ha='center', va='center', fontsize=7, color='#6b4a10', zorder=4,
-    )
+    # Terrasse (optionnelle)
+    if terrain.terrasse is not None:
+        t = terrain.terrasse
+        tx, ty = float(t.origine[0]), float(t.origine[1])
+        ax.add_patch(mpatches.Rectangle(
+            (tx, ty), float(t.largeur), float(t.hauteur),
+            facecolor='#d4b896', edgecolor='#8b6914', linewidth=1, alpha=0.85, zorder=3,
+        ))
+        ax.text(
+            tx + t.largeur / 2, ty + t.hauteur / 2, 'Terrasse',
+            ha='center', va='center', fontsize=7, color='#6b4a10', zorder=4,
+        )
 
     ax.set_xlim(-0.5, pw + 0.5)
     ax.set_ylim(-0.5, ph + 0.5)
@@ -187,6 +188,11 @@ def generate_pdf_report(
     Génère le rapport PDF 8 pages.
     Retourne les bytes du PDF prêts à être envoyés au client.
     """
+    if terrain is None:
+        raise ValueError("Données du terrain manquantes — vérifier le payload envoyé au backend.")
+    if terrain.parcelle is None:
+        raise ValueError("Parcelle manquante dans les données du terrain.")
+
     buf = io.BytesIO()
     c = pdf_canvas.Canvas(buf, pagesize=A4)
     date_str = datetime.now().strftime("%d/%m/%Y")

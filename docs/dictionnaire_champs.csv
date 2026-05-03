@@ -1,0 +1,65 @@
+champ,tier,type,definition,exemples
+id,meta,int,Identifiant unique de la plante ou variété,1
+genre,1,string,Genre botanique,Aconitum
+nom_commun,1,string,Nom français principal quand disponible,Aconit
+nom_latin,1,string,Nom botanique complet,Aconitum napellus
+cultivar_ou_espece,1,string,"Espèce, sous-espèce, variété ou cultivar",'Carneum'
+famille,1,string,Famille botanique,Renonculacées
+categorie,1,string,"Type paysager (vivace, couvre-sol, bulbeuse, arbuste, etc.)",vivace
+exposition_soleil,1,int 0/1,Picto soleil sur la fiche : 1 si compatible plein soleil,1
+exposition_mi_ombre,1,int 0/1,Picto soleil+nuage : 1 si compatible mi-ombre,1
+exposition_ombre,1,int 0/1,Picto nuage : 1 si compatible ombre,0
+plante_peu_courante,1,int 0/1,Picto !!! du livre,0
+sol_sec,1,int 0/1,Compatible sol sec,0
+sol_frais,1,int 0/1,Compatible sol frais,1
+sol_humide,1,int 0/1,Compatible sol humide,1
+sol_lourd,1,int 0/1,Compatible sol lourd,0
+sol_leger,1,int 0/1,Compatible sol léger,0
+sol_draine,1,int 0/1,Nécessite sol drainé,1
+sol_calcaire,1,int 0/1,Tolère sol calcaire,0
+sol_acide,1,int 0/1,Tolère sol acide,0
+sol_riche,1,int 0/1,Préfère sol riche,1
+sol_pauvre,1,int 0/1,Tolère sol pauvre,0
+besoin_eau,1,string,Besoin en eau (faible/moyen/élevé),moyen
+hauteur_min_cm,1,int,Hauteur minimum en cm,100
+hauteur_max_cm,1,int,Hauteur maximum en cm,150
+largeur_min_cm,1,int,Largeur minimum en cm,60
+largeur_max_cm,1,int,Largeur maximum en cm,60
+floraison_debut,1,string,Mois de début de floraison,mai
+floraison_fin,1,string,Mois de fin de floraison,juillet
+couleur_fleur,1,string,Description textuelle des couleurs de fleur,blanc ivoire
+couleur_feuillage,1,string,Description du feuillage si remarquable,argenté
+couleur_blanc,2,int 0/1,Binarisation : présence de blanc dans la floraison,1
+couleur_jaune,2,int 0/1,Binarisation jaune,0
+couleur_orange,2,int 0/1,Binarisation orange,0
+couleur_rouge,2,int 0/1,Binarisation rouge,0
+couleur_rose,2,int 0/1,Binarisation rose,0
+couleur_violet,2,int 0/1,Binarisation violet,0
+couleur_bleu,2,int 0/1,Binarisation bleu,0
+couleur_vert,2,int 0/1,Binarisation vert,0
+couleur_pourpre,2,int 0/1,Binarisation pourpre,0
+couleur_creme,2,int 0/1,Binarisation crème,1
+couleur_argente,2,int 0/1,Binarisation argenté (généralement feuillage),0
+palette_couleur,2,string,Famille de palette dérivée (chaude/froide/neutre/combinaison),froide
+usage_massif,1,int 0/1,Usage en massif,1
+usage_bordure,1,int 0/1,Usage en bordure,0
+usage_rocaille,1,int 0/1,Usage en rocaille,0
+usage_bassin,1,int 0/1,Usage près de bassin,0
+usage_pot,1,int 0/1,Usage en pot,0
+usage_couvre_sol,1,int 0/1,Usage couvre-sol,0
+usage_bouquet,1,int 0/1,Usage pour bouquet,0
+plantation_methode,1,string,Conseil de plantation extrait du livre si présent,
+entretien,1,string,Conseil d'entretien extrait du livre,
+remarques,1,string,Texte libre informatif,Supporte la sécheresse; climat doux.
+rusticite_min_C,3,int,Température minimum supportée en degrés Celsius (négatif),-25
+zone_rusticite,3,string,Zone de rusticité USDA ou équivalent européen,z5
+feuillage_type,3,string,Type de feuillage : persistant / semi_persistant / caduc,caduc
+distance_plantation_cm,3,int,Distance recommandée entre deux plants,40
+toxicite,3,string,Toxicité (oui / non / vide si inconnu),oui
+attire_pollinisateurs,3,int 0/1,Plante mellifère ou attractive pour pollinisateurs,1
+niveau_donnees,meta,string,Niveau de complétude (coquille / livre_partiel / livre_complet / enrichi),livre_complet
+source_page,meta,string,Page de référence dans le livre,17
+source_photo,meta,string,Référence photo si disponible,
+source_enrichissement,meta,string,Source des données Tier 3,Tela Botanica
+statut_validation,meta,string,Statut de validation manuel,extrait_structuré
+lot_integration,meta,string,Lot de travail ayant ajouté l'entrée,lots_1_a_5

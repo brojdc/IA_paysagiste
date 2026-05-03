@@ -1,0 +1,4 @@
+version,total_avant,ajout_lot,total_apres,commentaire
+v1-v5,,187,187,Lots 1 à 5 - extraction structurée du livre Horticolor
+v6,187,58,245,Lot 6 (pages 98-118) à vérifier depuis photo
+v7,245,0,245,Refonte schéma : tiers + colonnes critiques + nettoyage NaN/0 + audit
