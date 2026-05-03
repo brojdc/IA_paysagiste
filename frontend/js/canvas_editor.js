@@ -86,6 +86,8 @@ let canvas, ctx, scale = 20;
 
 // Pan clic-droit
 let _isPanning = false, _panStartSX = 0, _panStartSY = 0;
+// Pan clic-gauche sur fond vide
+let _isLeftPanning = false, _leftPanStartSX = 0, _leftPanStartSY = 0;
 
 function nextId() { return ++E._id; }
 
@@ -349,7 +351,14 @@ function afterChange() { render(); updateSynthesis(); notifyPayloadChange(); }
 function onWheel(e) {
   e.preventDefault();
   const factor = e.deltaY < 0 ? 1.12 : 0.90;
+  const oldZoom = E.zoom;
   E.zoom = Math.max(0.2, Math.min(8, E.zoom * factor));
+  const rect = canvas.getBoundingClientRect();
+  const sx = (e.clientX ?? e.pageX) - rect.left;
+  const sy = (e.clientY ?? e.pageY) - rect.top;
+  const ratio = E.zoom / oldZoom;
+  E.panOffX = sx - (sx - E.panOffX) * ratio;
+  E.panOffY = sy - (sy - E.panOffY) * ratio;
   render();
 }
 
@@ -547,6 +556,10 @@ function onDown(e) {
         const av = E.arbresV.find(a => a.id === hit.id);
         if (av) E.drag = { type: 'arbreV', id: av.id, startTX: tx, startTY: ty, origX: av.x, origY: av.y };
       }
+    } else {
+      _isLeftPanning = true;
+      _leftPanStartSX = (e.clientX ?? e.pageX) - E.panOffX;
+      _leftPanStartSY = (e.clientY ?? e.pageY) - E.panOffY;
     }
     showPropsPanel();
     render();
@@ -597,6 +610,13 @@ function onDown(e) {
 }
 
 function onMove(e) {
+  if (_isLeftPanning) {
+    E.panOffX = (e.clientX ?? e.pageX) - _leftPanStartSX;
+    E.panOffY = (e.clientY ?? e.pageY) - _leftPanStartSY;
+    canvas.style.cursor = 'grabbing';
+    render();
+    return;
+  }
   if (_isPanning) {
     E.panOffX = (e.clientX ?? e.pageX) - _panStartSX;
     E.panOffY = (e.clientY ?? e.pageY) - _panStartSY;
@@ -610,7 +630,7 @@ function onMove(e) {
   // Curseur
   if (E.tool === 'select') {
     const hit = getHitTarget(tx, ty);
-    canvas.style.cursor = hit ? (hit.type.includes('resize') ? 'nwse-resize' : 'grab') : 'default';
+    canvas.style.cursor = hit ? (hit.type.includes('resize') ? 'nwse-resize' : 'grab') : 'grab';
   } else {
     canvas.style.cursor = 'crosshair';
   }
@@ -695,6 +715,7 @@ function applyResize(rect, drag, dx, dy) {
 }
 
 function onUp(e) {
+  if (_isLeftPanning) { _isLeftPanning = false; return; }
   if (e?.button === 2) { _isPanning = false; return; }
 
   // Fin drag → afterChange + pushHistory (A1)
